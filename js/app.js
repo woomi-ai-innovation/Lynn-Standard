@@ -940,6 +940,17 @@
 
   /* ============ boot / auth (Supabase) ============ */
   function boot(){
+    // 비밀번호 재설정 메일의 링크로 들어왔는지 확인한다(Supabase가 주소의 #…를 지우기 전에 읽어둔다).
+    try{
+      var rawHash = location.hash || "";
+      if(/[#&]type=recovery(&|$)/.test(rawHash)){
+        S.recovery = true;
+      } else if(/[#&]error_code=/.test(rawHash) || /[#&]error=access_denied/.test(rawHash)){
+        S.authNotice = "비밀번호 재설정 링크가 만료됐거나 이미 사용됐어요. 아래에서 메일을 다시 요청해주세요.";
+        AUTH_TAB = "forgot";
+        history.replaceState(null, "", location.pathname + location.search + "#/");
+      }
+    }catch(e){}
     render();
     window.addEventListener("hashchange", render);
     initAuth();
@@ -955,20 +966,23 @@
 
     S.sb.auth.getSession().then(function(res){
       S.session = (res.data && res.data.session) || null;
+      if(!S.session) S.recovery = false;   // 링크가 잘못돼 세션이 안 만들어졌으면 재설정 화면에 갇히지 않게
       onAuthReady();
     });
     S.sb.auth.onAuthStateChange(function(event, session){
       if(event === "SIGNED_OUT"){
         teardownSubscriptions();
-        S.session = null; S.viewerId = null; S.viewerName = null;
+        S.session = null; S.viewerId = null; S.viewerName = null; S.recovery = false;
         S.isPartLeader=false; S.isTeamMember=false; S.canManageRoster=false; S.isOwner=false; S.viewApproved=false; S.membersReady=false;
         S.changes=[]; S.members={}; S.sites=[]; S.guidelineDocs={}; S.guidelineRevisions={};
         render();
         return;
       }
+      if(event === "PASSWORD_RECOVERY"){ S.recovery = true; }
       var wasSignedIn = !!S.session;
       S.session = session;
       if(session && !wasSignedIn){ onAuthReady(); }
+      else if(event === "PASSWORD_RECOVERY"){ render(); }
     });
   }
 
@@ -1079,6 +1093,10 @@
     var app = document.getElementById("app");
     if(!S.ready){ app.innerHTML = '<div class="loading">불러오는 중…</div>'; return; }
     if(S.noHost){ app.innerHTML = renderConfigGate(); return; }
+    // 비밀번호를 입력하는 중에 실시간 갱신이 화면을 다시 그리면 입력한 글자가 지워지므로, 같은 설정 화면에서는 건너뛴다.
+    var ae = document.activeElement;
+    if(S.session && !S.recovery && ae && ae.getAttribute && ae.getAttribute("data-pwfield") && /^#\/?settings/.test(location.hash)) return;
+    if(S.recovery && S.session){ app.innerHTML = renderRecoveryGate(); wireRecoveryGate(); return; }
     if(!S.session){ app.innerHTML = renderAuthPage(); wireAuthPage(); return; }
     if(S.showWelcome){ app.innerHTML = renderWelcomeGate(); wireWelcomeGate(); return; }
     // 모든 기준이 대외비라, 조회자는 팀원/파트장이 승인해줄 때까지 내용을 볼 수 없다.
@@ -1142,7 +1160,106 @@
     +'</div>';
   }
   var AUTH_TAB = "login";
+  function renderForgotPage(){
+    var notice = S.authNotice || ""; S.authNotice = "";
+    return '<div class="auth-gate">'
+      +'<div class="auth-gate-card">'
+        +authGateLogo()
+        +'<h1 style="font-size:17px;margin:0 0 6px;">비밀번호 찾기</h1>'
+        +'<p style="margin-bottom:18px;">가입한 이메일을 입력하면 비밀번호를 다시 설정할 수 있는 링크를 보내드려요.</p>'
+        +'<div class="auth-error'+(notice?' show':'')+'" id="authError">'+esc(notice)+'</div>'
+        +'<div class="f-field"><label for="authEmail">이메일</label><input id="authEmail" type="email" placeholder="name@company.com" autocomplete="email"></div>'
+        +'<button class="btn accent" id="btnForgotSubmit" type="button" style="width:100%;">재설정 메일 보내기</button>'
+        +'<button class="btn ghost" id="btnForgotBack" type="button" style="width:100%;margin-top:8px;">← 로그인으로 돌아가기</button>'
+        +'<div class="auth-note">메일이 보이지 않으면 스팸함도 확인해주세요. 링크는 한 번만, 일정 시간 동안만 쓸 수 있어요.</div>'
+      +'</div>'
+    +'</div>';
+  }
+  function wireForgotPage(){
+    var errBox = document.getElementById("authError");
+    function showErr(msg){ errBox.textContent = msg; errBox.classList.add("show"); }
+    document.getElementById("btnForgotBack").addEventListener("click", function(){ AUTH_TAB = "login"; render(); });
+    var btn = document.getElementById("btnForgotSubmit");
+    btn.addEventListener("click", function(){
+      var email = (document.getElementById("authEmail").value||"").trim();
+      if(!email){ showErr("이메일을 입력해주세요."); return; }
+      btn.disabled = true;
+      var redirectTo = location.origin + location.pathname;
+      S.sb.auth.resetPasswordForEmail(email, { redirectTo: redirectTo }).then(function(res){
+        btn.disabled = false;
+        if(res.error){
+          var m = res.error.message || "";
+          if(/rate limit|too many|security purposes/i.test(m)) showErr("요청이 너무 잦아요. 잠시 뒤에 다시 시도해주세요.");
+          else showErr(m || "메일을 보내는 중 오류가 발생했습니다.");
+          return;
+        }
+        // 가입 여부가 드러나지 않도록 성공 문구는 항상 같게 보여준다.
+        errBox.classList.remove("show");
+        btn.textContent = "메일을 보냈어요";
+        btn.disabled = true;
+        var note = document.querySelector(".auth-note");
+        if(note) note.textContent = "가입된 이메일이라면 재설정 링크가 담긴 메일이 곧 도착해요. 메일의 링크를 눌러 새 비밀번호를 설정해주세요.";
+      }).catch(function(err){ btn.disabled = false; showErr((err && err.message) || "메일을 보내는 중 오류가 발생했습니다."); });
+    });
+  }
+
+  /* ---- 비밀번호 재설정 메일의 링크로 들어왔을 때 새 비밀번호 입력 화면 ---- */
+  function renderRecoveryGate(){
+    return '<div class="auth-gate">'
+      +'<div class="auth-gate-card">'
+        +authGateLogo()
+        +'<h1 style="font-size:17px;margin:0 0 6px;">새 비밀번호 설정</h1>'
+        +'<p style="margin-bottom:18px;">앞으로 로그인할 때 쓸 새 비밀번호를 입력해주세요.</p>'
+        +'<div class="auth-error" id="authError"></div>'
+        +'<div class="f-field"><label for="recNew">새 비밀번호</label><input id="recNew" type="password" placeholder="6자 이상" autocomplete="new-password"></div>'
+        +'<div class="f-field"><label for="recNew2">새 비밀번호 확인</label><input id="recNew2" type="password" placeholder="한 번 더 입력" autocomplete="new-password"></div>'
+        +'<button class="btn accent" id="btnRecoverySubmit" type="button" style="width:100%;">비밀번호 변경</button>'
+        +'<button class="btn ghost" id="btnRecoveryCancel" type="button" style="width:100%;margin-top:8px;">취소</button>'
+      +'</div>'
+    +'</div>';
+  }
+  function wireRecoveryGate(){
+    var errBox = document.getElementById("authError");
+    function showErr(msg){ errBox.textContent = msg; errBox.classList.add("show"); }
+    document.getElementById("btnRecoveryCancel").addEventListener("click", function(){
+      S.recovery = false;
+      S.sb.auth.signOut();
+    });
+    var btn = document.getElementById("btnRecoverySubmit");
+    function submit(){
+      var n1 = document.getElementById("recNew").value || "";
+      var n2 = document.getElementById("recNew2").value || "";
+      var bad = checkNewPassword(n1, n2);
+      if(bad){ showErr(bad); return; }
+      btn.disabled = true;
+      S.sb.auth.updateUser({ password: n1 }).then(function(res){
+        btn.disabled = false;
+        if(res.error){ showErr(pwErrorMessage(res.error)); return; }
+        S.recovery = false;
+        location.hash = "#/";
+        toast("비밀번호가 변경되었습니다.");
+        render();
+      }).catch(function(err){ btn.disabled = false; showErr(pwErrorMessage(err)); });
+    }
+    btn.addEventListener("click", submit);
+    document.getElementById("recNew2").addEventListener("keydown", function(e){ if(e.key === "Enter") submit(); });
+  }
+  function checkNewPassword(n1, n2){
+    if(!n1 || !n2) return "새 비밀번호를 두 번 입력해주세요.";
+    if(n1.length < 6) return "비밀번호는 6자 이상이어야 해요.";
+    if(n1 !== n2) return "새 비밀번호가 서로 달라요. 다시 확인해주세요.";
+    return "";
+  }
+  function pwErrorMessage(err){
+    var m = (err && err.message) || "";
+    if(/same.*password|different from the old/i.test(m)) return "현재 비밀번호와 다른 비밀번호를 입력해주세요.";
+    if(/at least|characters|weak|short/i.test(m)) return "비밀번호가 너무 짧거나 약해요. 더 길게 입력해주세요.";
+    if(/session|jwt|not authenticated|missing/i.test(m)) return "로그인 정보가 만료됐어요. 다시 로그인한 뒤 시도해주세요.";
+    return m || "비밀번호를 변경하는 중 오류가 발생했습니다.";
+  }
+
   function renderAuthPage(){
+    if(AUTH_TAB === "forgot") return renderForgotPage();
     return '<div class="auth-gate">'
       +'<div class="auth-gate-card">'
         +authGateLogo()
@@ -1156,10 +1273,12 @@
         +'<div class="f-field"><label for="authPassword">비밀번호</label><input id="authPassword" type="password" placeholder="6자 이상" autocomplete="'+(AUTH_TAB==="signup"?"new-password":"current-password")+'"></div>'
         +(AUTH_TAB==="signup" ? '<div class="f-field"><label for="authName">이름</label><input id="authName" type="text" placeholder="실명을 입력해주세요"></div>' : '')
         +'<button class="btn accent" id="btnAuthSubmit" type="button" style="width:100%;">'+(AUTH_TAB==="signup"?"회원가입":"로그인")+'</button>'
+        +(AUTH_TAB==="login" ? '<div style="text-align:center;margin-top:12px;"><button type="button" data-auth-tab="forgot" style="border:none;background:none;padding:4px 6px;font-size:12px;color:var(--ink-soft);text-decoration:underline;cursor:pointer;">비밀번호를 잊으셨나요?</button></div>' : '')
       +'</div>'
     +'</div>';
   }
   function wireAuthPage(){
+    if(AUTH_TAB === "forgot"){ wireForgotPage(); return; }
     document.querySelectorAll("[data-auth-tab]").forEach(function(btn){
       btn.addEventListener("click", function(){ AUTH_TAB = btn.getAttribute("data-auth-tab"); render(); });
     });
@@ -2347,6 +2466,66 @@
     });
   }
 
+  /* ---- 내 계정: 비밀번호 변경 ---- */
+  function accountSettingsHtml(){
+    var f = S.pwForm || {};
+    var email = (S.session && S.session.user && S.session.user.email) || "";
+    return '<div class="detail-card">'
+      +'<h3 style="font-family:var(--font-d);font-size:14px;margin:0 0 4px;">내 계정</h3>'
+      +'<div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:12px;">'+esc(email)+'</div>'
+      +'<details id="pwDetails"'+(S.pwOpen?' open':'')+'>'
+        +'<summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:var(--ink-soft);">비밀번호 변경</summary>'
+        +'<div style="max-width:340px;margin-top:12px;">'
+          +'<div class="auth-error" id="pwError"></div>'
+          +'<div class="f-field"><label for="pwCur">현재 비밀번호</label><input id="pwCur" data-pwfield="cur" type="password" autocomplete="current-password" value="'+esc(f.cur||"")+'"></div>'
+          +'<div class="f-field"><label for="pwNew">새 비밀번호</label><input id="pwNew" data-pwfield="n1" type="password" placeholder="6자 이상" autocomplete="new-password" value="'+esc(f.n1||"")+'"></div>'
+          +'<div class="f-field"><label for="pwNew2">새 비밀번호 확인</label><input id="pwNew2" data-pwfield="n2" type="password" autocomplete="new-password" value="'+esc(f.n2||"")+'"></div>'
+          +'<button class="btn accent" id="btnPwChange" type="button">비밀번호 변경</button>'
+          +'<div style="margin-top:10px;font-size:11px;color:var(--ink-faint);line-height:1.55;">현재 비밀번호가 기억나지 않으면 로그아웃한 뒤 로그인 화면의 "비밀번호를 잊으셨나요?"를 이용해주세요.</div>'
+        +'</div>'
+      +'</details>'
+    +'</div>';
+  }
+  function wireAccountSettings(){
+    var det = document.getElementById("pwDetails");
+    if(det) det.addEventListener("toggle", function(){ S.pwOpen = det.open; });
+    S.pwForm = S.pwForm || {};
+    document.querySelectorAll("[data-pwfield]").forEach(function(inp){
+      inp.addEventListener("input", function(){ S.pwForm[inp.getAttribute("data-pwfield")] = inp.value; });
+    });
+    var btn = document.getElementById("btnPwChange");
+    if(!btn) return;
+    var errBox = document.getElementById("pwError");
+    function showErr(msg){ errBox.textContent = msg; errBox.classList.add("show"); }
+    function submit(){
+      errBox.classList.remove("show");
+      var cur = document.getElementById("pwCur").value || "";
+      var n1 = document.getElementById("pwNew").value || "";
+      var n2 = document.getElementById("pwNew2").value || "";
+      var email = (S.session && S.session.user && S.session.user.email) || "";
+      if(!cur){ showErr("현재 비밀번호를 입력해주세요."); return; }
+      var bad = checkNewPassword(n1, n2);
+      if(bad){ showErr(bad); return; }
+      if(cur === n1){ showErr("현재 비밀번호와 다른 비밀번호를 입력해주세요."); return; }
+      btn.disabled = true;
+      // 현재 비밀번호가 맞는지 먼저 확인한 뒤 변경한다(다른 사람이 켜진 화면에서 몰래 바꾸는 걸 막기 위해).
+      S.sb.auth.signInWithPassword({ email: email, password: cur }).then(function(res){
+        if(res.error){ btn.disabled = false; showErr("현재 비밀번호가 맞지 않아요."); return; }
+        return S.sb.auth.updateUser({ password: n1 }).then(function(r2){
+          btn.disabled = false;
+          if(r2.error){ showErr(pwErrorMessage(r2.error)); return; }
+          S.pwForm = {}; S.pwOpen = false;
+          ["pwCur","pwNew","pwNew2"].forEach(function(id){ var el = document.getElementById(id); if(el){ el.value = ""; el.blur(); } });
+          if(det) det.open = false;
+          toast("비밀번호가 변경되었습니다.");
+        });
+      }).catch(function(err){ btn.disabled = false; showErr(pwErrorMessage(err)); });
+    }
+    btn.addEventListener("click", submit);
+    var last = document.getElementById("pwNew2");
+    if(last) last.addEventListener("keydown", function(e){ if(e.key === "Enter") submit(); });
+  }
+
   function viewSettings(){
     var ids = Object.keys(S.members);
     var teamIds = sortRosterIds(ids.filter(function(id){ return memberIsTeam(S.members[id]); }));
@@ -2361,7 +2540,8 @@
 
     return '<div class="detail">'
       +'<div class="content-head"><div><h1>설정</h1></div></div>'
-      +'<div class="detail-card">'
+      + accountSettingsHtml()
+      +'<div class="detail-card" style="margin-top:14px;">'
         +'<h3 style="font-family:var(--font-d);font-size:14px;margin:0 0 10px;">팀 구성 ('+teamIds.length+'명)</h3>'
         +(teamRows || '<div class="empty">아직 등록된 팀원이 없습니다.</div>')
         +'<div style="margin-top:16px;font-size:11.5px;color:var(--ink-faint);line-height:1.6;">역할 변경은 파트장 또는 관리자만, 조회 승인은 팀원 또는 파트장이 할 수 있어요.</div>'
@@ -2461,6 +2641,7 @@
 
   function wireSettings(){
     resolveNames();
+    wireAccountSettings();
     document.querySelectorAll("[data-approve-view]").forEach(function(btn){
       btn.addEventListener("click", function(){ approveViewer(btn.getAttribute("data-approve-view")); });
     });
