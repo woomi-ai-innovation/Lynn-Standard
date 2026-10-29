@@ -1120,6 +1120,9 @@
     if((parts[0] === "new" || parts[0] === "edit") && !canWrite()){
       body = renderMessage("등록 권한이 없습니다", "신규 등록·수정은 팀원 또는 파트장으로 지정된 분만 할 수 있어요. 권한이 필요하면 파트장 또는 관리자에게 설정 페이지에서 추가해달라고 요청해주세요.");
     }
+    else if((parts[0] === "approvals" || parts[0] === "archive") && !canWrite()){
+      body = renderMessage("볼 수 없는 화면이에요", "승인 대기와 보관함은 팀원 또는 파트장만 이용할 수 있어요.");
+    }
     else if(parts[0] === "item" && parts[1]) body = viewItem(parts[1]);
     else if(parts[0] === "new") body = viewForm();
     else if(parts[0] === "edit" && parts[1]) body = viewForm(parts[1]);
@@ -1388,10 +1391,10 @@
         +'<input id="searchInput" type="text" placeholder="공종·내용·#태그 검색" value="'+esc(S.filters.q)+'"></div>'
       +'<div class="topbar-actions">'
         +'<button class="pill tb" data-nav-month="'+ymOf(new Date())+'">이번달</button>'
-        +'<button class="pill tb" data-nav="approvals">승인대기'+(pc>0?'<span class="badge">'+pc+'</span>':'')+'</button>'
+        +(canWrite() ? '<button class="pill tb" data-nav="approvals">승인대기'+(pc>0?'<span class="badge">'+pc+'</span>':'')+'</button>' : '')
         +'<button class="pill tb" data-nav="sites">현장현황</button>'
         +'<button class="pill tb" data-nav="dept">부서별</button>'
-        +'<button class="pill tb" data-nav="archive">보관함</button>'
+        +(canWrite() ? '<button class="pill tb" data-nav="archive">보관함</button>' : '')
         +'<button class="pill tb'+(S.docsearchOpen?' on':'')+'" id="docsearchToggleBtn" type="button">✦ 지침서 검색</button>'
         +(canWrite() ? '<button class="btn accent" data-nav="new">+ 신규 등록</button>' : '')
       +'</div>'
@@ -1552,7 +1555,9 @@
         if(S.filters.major && c.major !== S.filters.major) return false;
         if(S.filters.minor && c.minor !== S.filters.minor) return false;
       }
-      if(S.filters.status !== "all" && c.status !== S.filters.status) return false;
+      // 조회자는 승인된 항목만 본다(대기중·반려됨 필터도 없다).
+      var stFilter = canWrite() ? S.filters.status : "approved";
+      if(stFilter !== "all" && c.status !== stFilter) return false;
       if(S.filters.urgency && c.urgency !== S.filters.urgency) return false;
       if(S.filters.department && (c.department||DEFAULT_DEPARTMENT) !== S.filters.department) return false;
       if(monthYm && (c.changeDate||"").slice(0,7) !== monthYm) return false;
@@ -1599,7 +1604,7 @@
       statBar = '<div class="stat-row">'
         +'<button class="stat-tile" type="button" data-stat="all"><div class="n mono">'+S.changes.filter(function(c){return c.status==="approved" && !isChangeArchived(c);}).length+'</div><div class="l">전체 등록 건수</div></button>'
         +'<button class="stat-tile orange" type="button" data-stat="month"><div class="n mono">'+thisMonthCount+'</div><div class="l">이번달 변경 건수</div></button>'
-        +'<button class="stat-tile amber" type="button" data-stat="pending"><div class="n mono">'+pendingCount()+'</div><div class="l">승인대기 건수</div></button>'
+        +(canWrite() ? '<button class="stat-tile amber" type="button" data-stat="pending"><div class="n mono">'+pendingCount()+'</div><div class="l">승인대기 건수</div></button>' : '')
       +'</div>';
     }
 
@@ -1615,7 +1620,7 @@
     var statuses = [["approved","승인됨"],["pending","대기중"],["rejected","반려됨"],["all","전체"]];
     var urgencies = [["confirm","urgency-confirm","확인필요"],["required","urgency-required","필수반영"]];
     var html = '<div class="filter-row">';
-    statuses.forEach(function(s){
+    if(canWrite()) statuses.forEach(function(s){
       html += '<button class="pill'+(S.filters.status===s[0]?' on':'')+'" data-status="'+s[0]+'">'+s[1]+'</button>';
     });
     if(S.filters.major || S.filters.minor){
@@ -2527,6 +2532,13 @@
   }
 
   function viewSettings(){
+    // 조회자는 팀 구성·지침서 관리·승인 같은 운영 항목이 필요 없으니 내 계정(비밀번호 변경)만 보여준다.
+    if(!canWrite()){
+      return '<div class="detail">'
+        +'<div class="content-head"><div><h1>설정</h1></div></div>'
+        + accountSettingsHtml()
+      +'</div>';
+    }
     var ids = Object.keys(S.members);
     var teamIds = sortRosterIds(ids.filter(function(id){ return memberIsTeam(S.members[id]); }));
     var viewerIds = ids.filter(function(id){ return !memberIsTeam(S.members[id]); });
