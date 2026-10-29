@@ -989,6 +989,7 @@
   function onAuthReady(){
     if(!S.session){ S.ready = true; render(); return; }
     var u = S.session.user;
+    S.filters.q = "";   // 로그인 직후엔 검색어가 비어 있어야 한다
     S.viewerId = u.id;
     S.viewerName = (u.user_metadata && u.user_metadata.name) || (u.email||"").split("@")[0];
     subscribeChanges();
@@ -1388,7 +1389,7 @@
     +'<div class="topbar">'
       +'<div class="brand" data-nav="home"><span class="brand-logo">'+LYNN_LOGO_SVG+'</span><span class="mark">Standard</span><span class="brand-dot"></span><span class="sub">건축예산팀 · 실행파트</span></div>'
       +'<div class="search-wrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.5-3.5"/></svg>'
-        +'<input id="searchInput" type="text" placeholder="공종·내용·#태그 검색" value="'+esc(S.filters.q)+'"></div>'
+        +'<input id="searchInput" name="lynn-list-search" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore="true" placeholder="공종·내용·#태그 검색" value="'+esc(S.filters.q)+'"></div>'
       +'<div class="topbar-actions">'
         +'<button class="pill tb" data-nav-month="'+ymOf(new Date())+'">이번달</button>'
         +(canWrite() ? '<button class="pill tb" data-nav="approvals">승인대기'+(pc>0?'<span class="badge">'+pc+'</span>':'')+'</button>' : '')
@@ -1462,7 +1463,12 @@
     });
     var si = document.getElementById("searchInput");
     if(si){
-      si.addEventListener("input", function(){ S.filters.q = si.value; renderListInPlace(); });
+      si.addEventListener("input", function(){
+        // 브라우저 자동완성(저장된 로그인 이메일 등)이 검색창을 몰래 채우면 목록이 전부 필터링돼 비어 보이므로,
+        // 사용자가 검색창을 직접 누르고 입력한 경우만 반영한다.
+        if(document.activeElement !== si){ si.value = S.filters.q || ""; return; }
+        S.filters.q = si.value; renderListInPlace();
+      });
     }
     var logoutBtn = document.getElementById("btnLogout");
     if(logoutBtn) logoutBtn.addEventListener("click", function(){
@@ -2952,7 +2958,7 @@
   function docsearchPanelHtml(){
     var body;
     if(S.docsearchViewer) body = docsearchViewerHtml();
-    else body = '<div class="docsearch-searchbar"><input id="docsearchInput" type="text" placeholder="예: 에폭시, 주차장 바닥" value="'+esc(S.docsearchQuery)+'"></div>'
+    else body = '<div class="docsearch-searchbar"><input id="docsearchInput" name="lynn-doc-search" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore="true" placeholder="예: 에폭시, 주차장 바닥" value="'+esc(S.docsearchQuery)+'"></div>'
       +'<div class="docsearch-body" id="docsearchBody">'+docsearchResultsHtml()+'</div>';
     return '<div class="docsearch-panel">'
       +'<div class="docsearch-head"><span class="t">✦ 지침서 검색</span><button class="icon-btn" id="docsearchCloseBtn" aria-label="닫기" style="width:26px;height:26px;">✕</button></div>'
