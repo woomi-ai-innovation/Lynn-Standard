@@ -530,18 +530,89 @@
     return { text: text, type: ct.type };
   }
   function emlHtmlToText(html){
-    html = html.replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<style[\s\S]*?<\/style>/gi,"");
+    // 본문이 아닌 부분(스크립트·스타일·<head>·<title>·메타·주석)은 화면에 글자로 나오지 않게 미리 걷어낸다.
+    html = html.replace(/<!--[\s\S]*?-->/g,"")
+      .replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<style[\s\S]*?<\/style>/gi,"")
+      .replace(/<head[\s\S]*?<\/head>/gi,"").replace(/<title[\s\S]*?<\/title>/gi,"")
+      .replace(/<(meta|link)\b[^>]*>/gi,"");
     html = html.replace(/<br\s*\/?>/gi,"\n").replace(/<\/(p|div|tr|li|h[1-6])>/gi,"\n");
     // 문서에 붙이지 않은 요소라 스크립트는 절대 실행되지 않고, HTML 엔티티(&amp; 등)만 텍스트로 풀린다.
     var tmp = document.createElement("div");
     tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || "";
+    return tidyEmlText(tmp.textContent || tmp.innerText || "");
+  }
+  // 메일 HTML을 "표·줄바꿈·굵게/밑줄·목록"만 남긴 안전한 HTML로 바꾼다.
+  // 원본 HTML을 그대로 넣지 않고, DOMParser로 읽은 뒤 허용한 태그만 새로 만들어서(글자는 전부 이스케이프,
+  // 속성은 칸 병합 숫자와 정렬만 허용) 스크립트·링크·이미지·외부 스타일이 들어올 수 없다.
+  function emlHtmlToSafeHtml(html){
+    var doc;
+    try{ doc = new DOMParser().parseFromString(html, "text/html"); }catch(e){ return ""; }
+    var SKIP = { script:1, style:1, head:1, title:1, meta:1, link:1, noscript:1, iframe:1, object:1, embed:1, img:1, svg:1, button:1, input:1, select:1, textarea:1 };
+    var BLOCK = { p:1, div:1, h1:1, h2:1, h3:1, h4:1, h5:1, h6:1, blockquote:1, pre:1, center:1, section:1, article:1, header:1, footer:1 };
+    function alignOf(el){
+      var a = ((el.getAttribute && el.getAttribute("align")) || (el.style && el.style.textAlign) || "").toLowerCase();
+      return (a==="center" || a==="right") ? ' style="text-align:'+a+'"' : "";
+    }
+    function num(el, name){
+      var v = parseInt(el.getAttribute(name), 10);
+      return (v > 1 && v <= 50) ? ' '+name+'="'+v+'"' : "";
+    }
+    function kids(node){
+      var out = "";
+      for(var c = node.firstChild; c; c = c.nextSibling) out += conv(c);
+      return out;
+    }
+    function conv(node){
+      if(node.nodeType === 3){
+        return esc((node.nodeValue || "").replace(/[ \t\r\n\f]+/g, " "));
+      }
+      if(node.nodeType !== 1) return "";
+      var tag = node.tagName.toLowerCase();
+      if(SKIP[tag]) return "";
+      var inner = kids(node), st = node.style || {};
+      var bold = /^(bold|[6-9]00)$/.test(st.fontWeight || "");
+      var under = /underline/.test(st.textDecoration || "");
+      var res;
+      if(tag === "br") return "<br>";
+      if(tag === "table") return '<div class="att-eml-tablewrap"><table>'+inner+'</table></div>';
+      if(tag === "thead" || tag === "tbody" || tag === "tfoot" || tag === "tr") return '<'+tag+'>'+inner+'</'+tag+'>';
+      if(tag === "td" || tag === "th") return '<'+tag+num(node,"colspan")+num(node,"rowspan")+alignOf(node)+'>'+inner+'</'+tag+'>';
+      if(tag === "ul" || tag === "ol") return '<'+tag+'>'+inner+'</'+tag+'>';
+      if(tag === "li") return '<li>'+inner+'</li>';
+      if(BLOCK[tag]){
+        res = '<div'+alignOf(node)+'>'+(/^h[1-6]$/.test(tag) ? '<b>'+inner+'</b>' : inner)+'</div>';
+        return res;
+      }
+      res = inner;
+      if(tag === "b" || tag === "strong" || bold) res = '<b>'+res+'</b>';
+      if(tag === "i" || tag === "em") res = '<i>'+res+'</i>';
+      if(tag === "u" || under) res = '<u>'+res+'</u>';
+      if(tag === "sup" || tag === "sub") res = '<'+tag+'>'+res+'</'+tag+'>';
+      return res;
+    }
+    var root = doc.body || doc.documentElement;
+    var out = kids(root);
+    // 보이는 글자가 없으면(그림만 있는 메일 등) 비워서 텍스트판으로 대체되게 한다.
+    var probe = document.createElement("div"); probe.innerHTML = out;
+    if(!(probe.textContent || "").replace(/\s+/g,"")) return "";
+    // 앞뒤의 빈 줄 정리
+    return out.replace(/^(<div>\s*(<br>)?\s*<\/div>|<br>|\s)+/, "").replace(/(<div>\s*(<br>)?\s*<\/div>|<br>|\s)+$/, "");
+  }
+  // 일부 메일 프로그램(그룹웨어 편집기 등)은 텍스트 본문에도 CSS 코드("#dext_body { … }")를 그대로 넣어 보낸다.
+  // 그런 CSS 덩어리와 연속된 빈 줄을 정리해서 읽기 좋게 만든다.
+  function tidyEmlText(t){
+    t = (t||"").replace(/\r\n/g,"\n");
+    t = t.replace(/[#.]?[A-Za-z_][\w\-.#:> ]{0,60}\{[^{}]*:[^{}]*;?\s*\}/g, function(m){
+      return /[:]\s*[^;{}]+;/.test(m) || /\{\s*[\w-]+\s*:/.test(m) ? "" : m;
+    });
+    t = t.replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n");
+    return t;
   }
   function parseEmlFile(raw){
     var top = splitEmlHeaderBody(raw);
     var headers = parseEmlHeaders(top.headers);
     var attachmentNames = [];
-    var bodyText = "", isHtml = false;
+    var plainText = "", htmlText = "";
     function walk(bodyRaw, hdrs, depth){
       var ct = parseEmlContentType(hdrs["content-type"]);
       if(ct.type.indexOf("multipart/")===0 && ct.params.boundary && depth < 4){
@@ -565,21 +636,26 @@
         });
       } else {
         var decoded = decodeEmlBodyPart(bodyRaw, hdrs);
-        if(decoded.type === "text/html"){
-          if(!bodyText || isHtml){ bodyText = decoded.text; isHtml = true; }
-        } else {
-          if(!bodyText || isHtml){ bodyText = decoded.text; isHtml = false; }
-        }
+        // 같은 메일의 텍스트판/HTML판 중 먼저 나온 것만 쓰지 않고 둘 다 모아둔 뒤, 아래에서 HTML판을 우선 사용한다.
+        if(decoded.type === "text/html"){ if(!htmlText) htmlText = decoded.text; }
+        else if(decoded.type === "text/plain"){ if(!plainText) plainText = decoded.text; }
+        else if(!plainText){ plainText = decoded.text; }
       }
     }
     walk(top.body, headers, 0);
-    if(isHtml) bodyText = emlHtmlToText(bodyText);
+    var bodyText = "", bodyHtml = "";
+    if(htmlText){
+      bodyHtml = emlHtmlToSafeHtml(htmlText);
+      if(!bodyHtml) bodyText = emlHtmlToText(htmlText).trim();
+    }
+    if(!bodyHtml && !bodyText) bodyText = tidyEmlText(plainText);
     return {
       subject: decodeMimeWords(headers["subject"]) || "(제목 없음)",
       from: decodeMimeWords(headers["from"]||""),
       to: decodeMimeWords(headers["to"]||""),
       date: headers["date"]||"",
       bodyText: bodyText.trim(),
+      bodyHtml: bodyHtml,
       attachmentNames: attachmentNames
     };
   }
@@ -604,7 +680,9 @@
           +(eml.date ? '<div class="att-eml-meta"><b>날짜</b> '+esc(eml.date)+'</div>' : "")
         +'</div>'
         +attNote
-        +'<div class="att-eml-body">'+esc(eml.bodyText || "(본문 없음)")+'</div>'
+        +(eml.bodyHtml
+          ? '<div class="att-eml-body is-html">'+eml.bodyHtml+'</div>'
+          : '<div class="att-eml-body">'+esc(eml.bodyText || "(본문 없음)")+'</div>')
       +'</div>';
     }).catch(function(err){
       console.warn("eml preview failed", err);
