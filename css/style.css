@@ -571,6 +571,12 @@ img{ max-width:100%; }
   .att-eml-meta b{ display:inline-block; min-width:56px; color:var(--ink-faint); font-weight:500; }
   .att-eml-note{ font-size:11px; color:var(--ink-faint); background:var(--surface-2); border:1px solid var(--line-soft); border-radius:7px; padding:7px 10px; margin-bottom:10px; }
   .att-eml-body{ font-size:12.5px; line-height:1.7; white-space:pre-wrap; word-break:break-word; color:var(--ink); }
+  .att-eml-body.is-html{ white-space:normal; line-height:1.6; }
+  .att-eml-body.is-html ul, .att-eml-body.is-html ol{ margin:4px 0; padding-left:22px; }
+  .att-eml-tablewrap{ overflow-x:auto; margin:8px 0; max-width:100%; }
+  .att-eml-body table{ border-collapse:collapse; font-size:12px; }
+  .att-eml-body td, .att-eml-body th{ border:1px solid var(--line); padding:4px 9px; vertical-align:middle; word-break:keep-all; }
+  .att-eml-body th{ background:var(--surface-2); font-weight:700; }
 
   /* ---- after-deadline emphasis ---- */
   .after-heading{
