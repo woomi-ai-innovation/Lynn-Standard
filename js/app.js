@@ -1945,10 +1945,10 @@
         +'<div class="detail-crumb">'+esc(c.major)+' / '+esc(c.minor)+'</div>'
         +'<div class="detail-top"><h2>'+esc(c.title)+'</h2><div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;">'+urgencyChip(c.urgency)+statusChip(c.status)+(isChangeArchived(c) ? '<span class="chip neutral" title="지침서 개정판에 반영되어 목록·체크리스트에서 제외됐어요.">보관됨</span>' : '')+'</div></div>'
         +tagsBlock
-        +'<div class="fact-line">'
+        +'<div class="fact-line'+(String(c.effectiveScope||"").length > 12 ? ' wide-scope' : '')+'">'
           +'<span class="fl-item"><b>날짜</b><span class="fl-val mono">'+fmtDate(c.changeDate,precision)+'</span></span>'
           +'<span class="fl-item"><b>유관부서</b><span class="fl-val">'+esc(c.department||DEFAULT_DEPARTMENT)+'</span></span>'
-          +'<span class="fl-item"><b>적용현장</b><span class="fl-val">'+esc(c.effectiveScope||"전현장")+'</span></span>'
+          +'<span class="fl-item"><b>적용현장</b><span class="fl-val wrap">'+esc(c.effectiveScope||"전현장")+'</span></span>'
           +'<span class="fl-item"><b>등록자</b><span class="fl-val">'+userLabel(c.submittedById, c.submittedByName, "초기 등록")+'</span></span>'
         +'</div>'
         +'<div class="block"><h3>실행 반영 내용</h3><p>'+esc(c.summary)+'</p></div>'
