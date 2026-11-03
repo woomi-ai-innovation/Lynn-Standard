@@ -372,6 +372,9 @@ img{ max-width:100%; }
   }
   .fact-line .fl-item b{ font-weight:500; color:#788290; font-size:10.5px; letter-spacing:.04em; }
   .fact-line .fl-item .fl-val{ font-size:13.5px; font-weight:400; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* 적용현장처럼 길어질 수 있는 값은 잘라내지 않고 줄바꿈해서 전부 보여준다. 글자가 길면 그 칸을 더 넓게 준다. */
+  .fact-line .fl-item .fl-val.wrap{ overflow:visible; text-overflow:clip; white-space:normal; word-break:keep-all; overflow-wrap:anywhere; line-height:1.5; }
+  @media (min-width:721px){ .fact-line.wide-scope{ grid-template-columns:minmax(0,.8fr) minmax(0,.95fr) minmax(0,2fr) minmax(0,.9fr); } }
   .block{ margin-top:18px; }
   .block h3{ font-family:var(--font-d); font-weight:600; font-size:13px; margin:0 0 8px; color:var(--ink-soft); }
   .block p{ font-size:13.5px; line-height:1.65; margin:0; white-space:pre-wrap; }
