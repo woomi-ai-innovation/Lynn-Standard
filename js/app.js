@@ -3575,7 +3575,7 @@
       var notExec = !(x.isExecutor && memberIsTeam(x));
       return { id: mid, name: (x.name || "이름 비공개"), notExec: notExec };
     }).sort(function(a,b){ return a.name.localeCompare(b.name,"ko"); }).map(function(x){
-      return '<option value="'+esc(x.id)+'"'+(draft.managerId===x.id?' selected':'')+'>'+esc(x.name)+(x.notExec?' (실행담당 아님)':'')+'</option>';
+      return '<option value="'+esc(x.id)+'"'+(draft.managerId===x.id?' selected':'')+'>'+esc(x.name)+'</option>';
     }).join("") : '<option value="" disabled>실행담당자가 없습니다 (설정 &gt; 팀 구성에서 지정)</option>');
 
     var controlCard = (statusRowHtml ? '<div class="site-status-row">'+statusRowHtml+'</div>' : '')
