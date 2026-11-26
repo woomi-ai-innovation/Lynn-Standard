@@ -2512,47 +2512,48 @@
     var isMe = id === S.viewerId;
     var isViewer = !memberIsTeam(m);
     var seenLabel = m.firstSeenAt ? (fmtDate(m.firstSeenAt.slice(0,10),"day")+' 첫 방문') : '접속 대기중';
-    // 대외비 조회 승인: 조회자(role 미지정)만 해당, 팀원·파트장은 역할 자체로 항상 조회 가능하므로 표시하지 않는다.
-    var viewChip = "";
+    var curRole = (m.role==="팀원" || m.role==="파트장") ? m.role : "조회자";
+
+    // 가운데 칸(스위치 한 개): 조회자는 "열람 허용", 팀원·파트장은 "실행담당".
+    // 열람 허용 = 대외비 변경 이력을 볼 수 있는지(팀원·파트장이 켜고 끔). 팀원·파트장은 역할만으로 항상 열람 가능.
+    // 실행담당 = 현장현황의 담당자 목록에 나오는지(권한 역할과 별개, 파트장·관리자만 켜고 끔).
+    var mid = "";
     if(isViewer){
-      if(m.viewApproved){
-        viewChip = '<span class="chip approved" title="변경 이력을 조회할 수 있어요.">조회 가능</span>'
-          +((canWrite() && !isMe) ? '<button class="btn ghost" type="button" data-revoke-view="'+esc(id)+'" style="padding:4px 10px;font-size:11px;" title="이 사람의 조회 승인을 취소해요. 다시 승인 전까지 변경 이력을 볼 수 없어요.">승인 취소</button>' : '');
-      } else if(canWrite() && !isMe){
-        viewChip = '<button class="btn ghost" type="button" data-approve-view="'+esc(id)+'" style="padding:4px 10px;font-size:11px;" title="이 사람이 변경 이력을 조회할 수 있게 승인해요.">조회 승인</button>';
+      if(canWrite() && !isMe){
+        mid = '<label class="tg view" title="켜면 이 사람이 변경 이력을 볼 수 있어요."><input type="checkbox" data-view-toggle="'+esc(id)+'"'+(m.viewApproved?' checked':'')+'><span class="sw" aria-hidden="true"></span><span class="lbl">열람 허용</span></label>';
       } else {
-        viewChip = '<span class="chip pending" title="아직 팀원/파트장의 조회 승인을 받지 못했어요.">승인 대기</span>';
+        mid = '<span class="tg-txt'+(m.viewApproved?' on':'')+'">'+(m.viewApproved?'열람 허용':'승인 대기')+'</span>';
       }
+    } else if(S.canManageRoster){
+      mid = '<label class="tg" title="켜면 현장현황의 담당자 목록에 이 사람이 나와요."><input type="checkbox" data-exec-toggle="'+esc(id)+'"'+(m.isExecutor?' checked':'')+'><span class="sw" aria-hidden="true"></span><span class="lbl">실행담당</span></label>';
+    } else {
+      mid = '<span class="tg-txt'+(m.isExecutor?' on':'')+'">'+(m.isExecutor?'실행담당':'')+'</span>';
     }
-    // 실행담당자 표시(권한 역할과 별개): 현장현황의 담당자 목록에는 이 표시가 켜진 팀원·파트장만 나온다.
-    // 파트장(팀 구성 관리 권한)만 켜고 끌 수 있고, 그 외에는 켜져 있을 때만 읽기용 칩으로 보여준다.
-    var execChip = "";
-    if(memberIsTeam(m)){
-      if(S.canManageRoster){
-        execChip = '<button class="btn ghost exec-toggle'+(m.isExecutor?' on':'')+'" type="button" data-exec-toggle="'+esc(id)+'" aria-pressed="'+(m.isExecutor?'true':'false')+'" title="켜면 현장현황의 담당자 목록에 이 사람이 나와요.">'+(m.isExecutor?'실행담당자 ✓':'실행담당자 지정')+'</button>';
-      } else if(m.isExecutor){
-        execChip = '<span class="chip approved" title="현장현황의 담당자로 지정할 수 있어요.">실행담당자</span>';
-      }
+
+    // 오른쪽 칸: 역할. 바꿀 수 있으면 드롭다운 하나, 아니면 글자만.
+    var role;
+    if(S.canManageRoster && !isMe){
+      role = '<span class="role-sel" data-r="'+curRole+'"><select data-role-sel="'+esc(id)+'" aria-label="역할">'
+        + ["조회자","팀원","파트장"].map(function(r){ return '<option value="'+r+'"'+(r===curRole?' selected':'')+'>'+r+'</option>'; }).join("")
+        + '</select></span>';
+    } else {
+      role = '<span class="role-txt" data-r="'+curRole+'"'+(isMe?' title="본인 역할은 여기서 바꿀 수 없어요. 다른 파트장에게 요청해주세요."':'')+'>'+esc(curRole)+'</span>';
     }
-    return '<div class="roster-row"><span class="rname">'+(isMe?'<span style="color:var(--accent);">(나) </span>':'')+'<span class="uname" data-uid="'+esc(id)+'">…</span></span>'
-      +'<span class="rmeta mono">'+seenLabel+'</span>'
-      +viewChip
-      +execChip
-      +(S.canManageRoster && !isMe ?
-        '<div class="seg" data-role-seg="'+esc(id)+'">'
-          +'<button data-role="조회자" class="'+(m.role!=="팀원"&&m.role!=="파트장"?"on":"")+'">조회자</button>'
-          +'<button data-role="팀원" class="'+(m.role==="팀원"?"on":"")+'">팀원</button>'
-          +'<button data-role="파트장" class="'+(m.role==="파트장"?"on":"")+'">파트장</button>'
-        +'</div>'
-        : '<span class="chip neutral"'+(isMe?' title="본인 역할은 여기서 바꿀 수 없어요. 다른 파트장에게 요청해주세요."':'')+'>'+esc(m.role==="팀원"||m.role==="파트장"?m.role:"조회자")+'</span>')
+
+    return '<div class="roster-row">'
+      +'<div class="rwho"><span class="rname">'+(isMe?'<span style="color:var(--accent);">(나) </span>':'')+'<span class="uname" data-uid="'+esc(id)+'">…</span></span>'
+      +'<span class="rmeta">'+seenLabel+'</span></div>'
+      + mid + role
       +'</div>';
   }
 
-  // 팀 구성 정렬: (나) 본인이 맨 위, 그 다음 파트장(관리자 포함), 그 뒤로 팀원 — 같은 그룹 안에서는 이름 가나다순.
+  // 팀 구성 정렬: 실행담당자 → 파트장(관리자 포함) → 팀원 순. 실행담당자 안에서도 파트장이 팀원보다 먼저,
+  // 같은 그룹 안에서는 이름 가나다순.
   function rosterSortRank(id){
-    if(id === S.viewerId) return 0;
     var m = S.members[id];
-    return (m.role==="파트장" || m.isAdmin) ? 1 : 2;
+    var isLeader = (m.role==="파트장" || m.isAdmin);
+    if(m.isExecutor) return isLeader ? 0 : 1;
+    return isLeader ? 2 : 3;
   }
   function rosterSortName(id){
     var m = S.members[id];
@@ -2641,7 +2642,8 @@
     var viewerRows = viewerIds.map(rosterRowHtml).join("");
 
     var viewerSection = '<div class="detail-card" style="margin-top:14px;">'
-      +'<h3 style="font-family:var(--font-d);font-size:14px;margin:0 0 10px;">조회자 ('+viewerIds.length+'명)</h3>'
+      +'<h3 style="font-family:var(--font-d);font-size:14px;margin:0 0 4px;">조회자 ('+viewerIds.length+'명)</h3>'
+      +'<div style="font-size:11.5px;color:var(--ink-faint);margin:0 0 6px;">‘열람 허용’을 켜면 변경 이력을 볼 수 있어요. 역할을 팀원·파트장으로 바꾸면 팀 구성으로 올라가요.</div>'
       +(viewerRows || '<div class="empty">새로 가입했거나 아직 팀원·파트장으로 지정되지 않은 사람이 없습니다.</div>')
     +'</div>';
 
@@ -2651,7 +2653,7 @@
       +'<div class="detail-card" style="margin-top:14px;">'
         +'<h3 style="font-family:var(--font-d);font-size:14px;margin:0 0 10px;">팀 구성 ('+teamIds.length+'명)</h3>'
         +(teamRows || '<div class="empty">아직 등록된 팀원이 없습니다.</div>')
-        +'<div style="margin-top:16px;font-size:11.5px;color:var(--ink-faint);line-height:1.6;">역할 변경은 파트장 또는 관리자만, 조회 승인은 팀원 또는 파트장이 할 수 있어요.</div>'
+        +'<div style="margin-top:16px;font-size:11.5px;color:var(--ink-faint);line-height:1.6;">역할·실행담당 지정은 파트장 또는 관리자만, 열람 허용은 팀원 또는 파트장이 할 수 있어요.</div>'
       +'</div>'
       + guidelineDocsSettingsHtml()
       + guidelineHistorySettingsHtml()
@@ -2728,19 +2730,19 @@
     return S.db.doc("members/"+id).update({ isExecutor: !!on });
   }
 
-  function approveViewer(id){
-    if(!S.db) return;
+  function approveViewer(id, undo){
+    if(!S.db){ if(undo) undo(); return; }
     S.db.doc("members/"+id).update({ viewApproved: true })
-      .then(function(){ toast("조회를 승인했습니다."); })
-      .catch(function(err){ console.warn(err); toast("승인 처리 중 오류가 발생했습니다."); });
+      .then(function(){ toast("열람을 허용했습니다."); })
+      .catch(function(err){ console.warn(err); if(undo) undo(); toast("처리 중 오류가 발생했습니다."); });
   }
 
-  function revokeViewer(id){
-    if(!S.db) return;
-    if(!confirm("이 조회자의 조회 승인을 취소할까요? 다시 승인하기 전까지 변경 이력을 볼 수 없어요.")) return;
+  function revokeViewer(id, undo){
+    if(!S.db){ if(undo) undo(); return; }
+    if(!confirm("이 조회자의 열람 허용을 해제할까요? 다시 켜기 전까지 변경 이력을 볼 수 없어요.")){ if(undo) undo(); return; }
     S.db.doc("members/"+id).update({ viewApproved: false })
-      .then(function(){ toast("조회 승인을 취소했습니다."); })
-      .catch(function(err){ console.warn(err); toast("승인 취소 중 오류가 발생했습니다."); });
+      .then(function(){ toast("열람 허용을 해제했습니다."); })
+      .catch(function(err){ console.warn(err); if(undo) undo(); toast("처리 중 오류가 발생했습니다."); });
   }
 
   function deleteGuidelineRevision(revId){
@@ -2754,30 +2756,32 @@
   function wireSettings(){
     resolveNames();
     wireAccountSettings();
-    document.querySelectorAll("[data-approve-view]").forEach(function(btn){
-      btn.addEventListener("click", function(){ approveViewer(btn.getAttribute("data-approve-view")); });
-    });
-    document.querySelectorAll("[data-revoke-view]").forEach(function(btn){
-      btn.addEventListener("click", function(){ revokeViewer(btn.getAttribute("data-revoke-view")); });
-    });
-    if(!S.canManageRoster) return;
-    document.querySelectorAll("[data-exec-toggle]").forEach(function(btn){
-      btn.addEventListener("click", function(){
-        var id = btn.getAttribute("data-exec-toggle");
-        var next = !(S.members[id] && S.members[id].isExecutor);
-        setMemberExecutor(id, next)
-          .then(function(){ toast(next ? "실행담당자로 지정했습니다." : "실행담당자 지정을 해제했습니다."); })
-          .catch(function(){ toast("변경 중 오류가 발생했습니다. (is_executor 컬럼 추가 SQL을 실행했는지 확인해주세요)"); });
+    document.querySelectorAll("[data-view-toggle]").forEach(function(box){
+      box.addEventListener("change", function(){
+        var id = box.getAttribute("data-view-toggle");
+        var next = box.checked;
+        var undo = function(){ box.checked = !next; };
+        if(next) approveViewer(id, undo); else revokeViewer(id, undo);
       });
     });
-    document.querySelectorAll("[data-role-seg]").forEach(function(seg){
-      var id = seg.getAttribute("data-role-seg");
-      seg.querySelectorAll("[data-role]").forEach(function(btn){
-        btn.addEventListener("click", function(){
-          setMemberRole(id, btn.getAttribute("data-role"))
-            .then(function(){ toast("역할이 변경되었습니다."); })
-            .catch(function(){ toast("변경 중 오류가 발생했습니다."); });
-        });
+    if(!S.canManageRoster) return;
+    document.querySelectorAll("[data-exec-toggle]").forEach(function(box){
+      box.addEventListener("change", function(){
+        var id = box.getAttribute("data-exec-toggle");
+        var next = box.checked;
+        setMemberExecutor(id, next)
+          .then(function(){ toast(next ? "실행담당자로 지정했습니다." : "실행담당자 지정을 해제했습니다."); })
+          .catch(function(){ box.checked = !next; toast("변경 중 오류가 발생했습니다. (is_executor 컬럼 추가 SQL을 실행했는지 확인해주세요)"); });
+      });
+    });
+    document.querySelectorAll("[data-role-sel]").forEach(function(sel){
+      var id = sel.getAttribute("data-role-sel");
+      var prev = sel.value;
+      sel.addEventListener("change", function(){
+        var next = sel.value;
+        setMemberRole(id, next)
+          .then(function(){ prev = next; if(sel.parentNode) sel.parentNode.setAttribute("data-r", next); toast("역할이 변경되었습니다."); })
+          .catch(function(){ sel.value = prev; toast("변경 중 오류가 발생했습니다."); });
       });
     });
     document.querySelectorAll("[data-gdoc-upload]").forEach(function(input){
