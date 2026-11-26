@@ -41,6 +41,7 @@
     sb:null, session:null,
     viewerId:null, isOwner:false, isPartLeader:false, isTeamMember:false, canManageRoster:false, viewApproved:false, membersReady:false,
     ready:false,
+    viewerQ:"", viewerLimit:20, viewerOpen:false,
     changes:[], members:{}, sites:[],
     filters:{ major:null, minor:null, status:"approved", q:"", urgency:null, department:null },
     collapsedMajors:{},
@@ -764,7 +765,7 @@
       createdAt:"created_at"
     },
     members: {
-      name:"name", displayName:"display_name", role:"role", isAdmin:"is_admin", viewApproved:"view_approved", isExecutor:"is_executor",
+      name:"name", displayName:"display_name", role:"role", isAdmin:"is_admin", viewApproved:"view_approved", isExecutor:"is_executor", siteName:"site_name", jobTitle:"job_title",
       firstSeenAt:"first_seen_at", lastSeenAt:"last_seen_at",
       addedBy:"added_by", addedAt:"added_at", createdAt:"created_at"
     },
@@ -1174,7 +1175,7 @@
     if(S.noHost){ app.innerHTML = renderConfigGate(); return; }
     // 비밀번호를 입력하는 중에 실시간 갱신이 화면을 다시 그리면 입력한 글자가 지워지므로, 같은 설정 화면에서는 건너뛴다.
     var ae = document.activeElement;
-    if(S.session && !S.recovery && ae && ae.getAttribute && ae.getAttribute("data-pwfield") && /^#\/?settings/.test(location.hash)) return;
+    if(S.session && !S.recovery && ae && ae.getAttribute && (ae.getAttribute("data-profield") || ((ae.getAttribute("data-pwfield") || ae.id==="viewerSearch") && /^#\/?settings/.test(location.hash)))) return;
     if(S.recovery && S.session){ app.innerHTML = renderRecoveryGate(); wireRecoveryGate(); return; }
     if(!S.session){ app.innerHTML = renderAuthPage(); wireAuthPage(); return; }
     if(S.showWelcome){ app.innerHTML = renderWelcomeGate(); wireWelcomeGate(); return; }
@@ -1353,7 +1354,9 @@
         +'<div class="auth-error" id="authError"></div>'
         +'<div class="f-field"><label for="authEmail">이메일</label><input id="authEmail" type="email" placeholder="name@company.com" autocomplete="email"></div>'
         +'<div class="f-field"><label for="authPassword">비밀번호</label><input id="authPassword" type="password" placeholder="6자 이상" autocomplete="'+(AUTH_TAB==="signup"?"new-password":"current-password")+'"></div>'
-        +(AUTH_TAB==="signup" ? '<div class="f-field"><label for="authName">이름</label><input id="authName" type="text" placeholder="실명을 입력해주세요"></div>' : '')
+        +(AUTH_TAB==="signup" ? '<div class="f-field"><label for="authName">이름</label><input id="authName" type="text" placeholder="실명을 입력해주세요"></div>'
+          +'<div class="f-field"><label for="authSite">소속</label><input id="authSite" type="text" maxlength="40" placeholder="예: 화성남양2차 임대 / 건축예산팀"></div>'
+          +'<div class="f-field"><label for="authJob">직책 (선택)</label><select id="authJob">'+jobOptionsHtml("")+'</select></div>' : '')
         +'<button class="btn accent" id="btnAuthSubmit" type="button" style="width:100%;">'+(AUTH_TAB==="signup"?"회원가입":"로그인")+'</button>'
         +(AUTH_TAB==="login" ? '<div style="text-align:center;margin-top:12px;"><button type="button" data-auth-tab="forgot" style="border:none;background:none;padding:4px 6px;font-size:12px;color:var(--ink-soft);text-decoration:underline;cursor:pointer;">비밀번호를 잊으셨나요?</button></div>' : '')
       +'</div>'
@@ -1376,7 +1379,10 @@
         var nameEl = document.getElementById("authName");
         var name = nameEl ? (nameEl.value||"").trim() : "";
         if(!name){ showErr("이름을 입력해주세요."); submitBtn.disabled=false; return; }
-        S.sb.auth.signUp({ email: email, password: pw, options:{ data:{ name: name } } }).then(function(res){
+        var site = (document.getElementById("authSite").value||"").trim();
+        var job = document.getElementById("authJob").value||"";
+        if(!site){ showErr("소속을 입력해주세요."); submitBtn.disabled=false; return; }
+        S.sb.auth.signUp({ email: email, password: pw, options:{ data:{ name: name, site_name: site, job_title: job } } }).then(function(res){
           submitBtn.disabled = false;
           if(res.error){ showErr(res.error.message); return; }
           if(res.data && res.data.session){
@@ -1416,19 +1422,59 @@
       render();
     });
   }
+  /* ---- 소속·직책 (조회자가 누구인지 승인하는 사람이 알아볼 수 있게) ---- */
+  // 이 사이트는 공무책임자·공무보에게만 배포하므로 직책은 두 가지 중에서 고른다.
+  function jobTitles(){ return ["공무책임자","공무보"]; }
+  function jobOptionsHtml(sel){
+    return '<option value="">선택 안 함</option>'+jobTitles().map(function(j){
+      return '<option value="'+j+'"'+(j===sel?' selected':'')+'>'+j+'</option>';
+    }).join("");
+  }
+  function profileFormHtml(m){
+    m = m || {};
+    return '<div class="prof-form">'
+      +'<div class="f-field"><label for="profSite">소속</label><input id="profSite" data-profield="site" type="text" maxlength="40" placeholder="예: 화성남양2차 임대 / 건축예산팀" value="'+esc(m.siteName||"")+'"></div>'
+      +'<div class="f-field"><label for="profJob">직책 (선택)</label><select id="profJob" data-profield="job">'+jobOptionsHtml(m.jobTitle||"")+'</select></div>'
+      +'<div class="auth-error" id="profError"></div>'
+      +'<button class="btn accent" id="btnProfSave" type="button">저장</button>'
+    +'</div>';
+  }
+  function wireProfileForm(){
+    var btn = document.getElementById("btnProfSave");
+    if(!btn) return;
+    var errBox = document.getElementById("profError");
+    function showErr(msg){ errBox.textContent = msg; errBox.classList.add("show"); }
+    btn.addEventListener("click", function(){
+      errBox.classList.remove("show");
+      var site = (document.getElementById("profSite").value||"").trim();
+      var job = document.getElementById("profJob").value||"";
+      if(!site){ showErr("소속을 입력해주세요."); return; }
+      if(!S.db || !S.viewerId){ showErr("저장 기능을 사용할 수 없습니다."); return; }
+      btn.disabled = true;
+      S.db.doc("members/"+S.viewerId).update({ siteName: site, jobTitle: job })
+        .then(function(){ btn.disabled = false; toast("저장했습니다."); })
+        .catch(function(err){ console.warn(err); btn.disabled = false; showErr("저장 중 오류가 발생했습니다. (site_name / job_title 컬럼 추가 SQL을 실행했는지 확인해주세요)"); });
+    });
+  }
+
   function renderPendingViewGate(){
     var name = S.viewerName || "";
+    var me = (S.members && S.members[S.viewerId]) || {};
     return '<div class="auth-gate">'
       +'<div class="auth-gate-card">'
         +authGateLogo()
         +'<h1>'+esc(name)+'님, 승인 대기 중이에요</h1>'
         +'<p>실행 편성 기준 변경 이력은 대외비라, 팀원 또는 파트장의 승인을 받은 뒤에 조회할 수 있어요. 팀원 또는 파트장에게 승인을 요청해주세요.</p>'
-        +'<div class="welcome-role-note">설정 페이지 &gt; 팀 구성에서 팀원 또는 파트장이 "승인" 버튼을 눌러주면 바로 내용을 볼 수 있어요.</div>'
+        +'<div class="welcome-role-note">설정 페이지 &gt; 조회자 목록에서 팀원 또는 파트장이 "열람 허용"을 켜주면 바로 내용을 볼 수 있어요.</div>'
+        +(me.siteName
+          ? '<div class="pending-info">제출한 정보 · '+esc(me.siteName)+(me.jobTitle?' · '+esc(me.jobTitle):'')+'</div>'
+          : '<p style="margin-top:16px;">승인하는 분이 알아볼 수 있게 소속과 직책을 알려주세요.</p>'+profileFormHtml(me))
         +'<button class="btn ghost" id="btnPendingLogout" type="button" style="width:100%;margin-top:16px;">로그아웃</button>'
       +'</div>'
     +'</div>';
   }
   function wirePendingViewGate(){
+    wireProfileForm();
     var btn = document.getElementById("btnPendingLogout");
     if(!btn) return;
     btn.addEventListener("click", function(){ S.sb.auth.signOut(); });
@@ -1442,6 +1488,7 @@
 
   function shell(bodyHtml){
     var pc = pendingCount();
+    var vpc = canWrite() ? viewerPendingCount() : 0;
     var parts = route();
     var curMajor = S.filters.major, curMinor = S.filters.minor;
 
@@ -1484,7 +1531,7 @@
           +'<span class="role'+(S.isPartLeader?' lead':'')+'">'+(S.isPartLeader?'파트장':(S.isTeamMember?'팀원':'조회자'))+'</span>'
         +'</button>'
         +'<span class="who-divider"></span>'
-        +'<button class="icon-btn" data-nav="settings" aria-label="설정"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3.4a2 2 0 010-4h.09A1.65 1.65 0 005 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 5a1.65 1.65 0 001-1.51V3.4a2 2 0 014 0v.09A1.65 1.65 0 0015 5a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1h.09a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>'
+        +'<button class="icon-btn" data-nav="settings" aria-label="설정"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3.4a2 2 0 010-4h.09A1.65 1.65 0 005 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 5a1.65 1.65 0 001-1.51V3.4a2 2 0 014 0v.09A1.65 1.65 0 0015 5a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1h.09a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>'+(vpc>0?'<span class="dot-badge" title="승인 대기 중인 조회자">'+vpc+'</span>':'')+'</button>'
         +'<button class="icon-btn" id="btnLogout" aria-label="로그아웃" title="로그아웃"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>'
       +'</div>'
     +'</div>'
@@ -2507,7 +2554,44 @@
   // 전부 아래 "조회자" 목록에 머물고, 파트장이 거기서 팀원/파트장으로 바꿔줘야 팀 구성으로 올라간다.
   function memberIsTeam(m){ return m.role==="팀원" || m.role==="파트장" || m.isAdmin; }
 
-  function rosterRowHtml(id){
+  function viewerMatches(id, q){
+    if(!q) return true;
+    var m = S.members[id];
+    var hay = [m.name, m.displayName, m.siteName, m.jobTitle].join(" ").toLowerCase();
+    return q.toLowerCase().split(/\s+/).filter(Boolean).every(function(t){ return hay.indexOf(t) !== -1; });
+  }
+  // 열람 허용 중인 조회자 목록: 소속(현장)별로 묶어 가나다순, 한 번에 S.viewerLimit명까지.
+  function approvedViewerListHtml(){
+    var q = (S.viewerQ || "").trim();
+    var ids = Object.keys(S.members).filter(function(id){
+      var m = S.members[id];
+      return !memberIsTeam(m) && m.viewApproved && viewerMatches(id, q);
+    }).sort(function(a,b){
+      var A = S.members[a], B = S.members[b];
+      var ga = A.siteName || "\uffff", gb = B.siteName || "\uffff";
+      if(ga !== gb) return ga.localeCompare(gb, "ko");
+      return rosterSortName(a).localeCompare(rosterSortName(b), "ko");
+    });
+    if(!ids.length) return '<div class="roster-empty">'+(q ? '검색 결과가 없어요.' : '열람 허용 중인 조회자가 없어요.')+'</div>';
+    var shown = ids.slice(0, S.viewerLimit), html = "", lastGroup = null;
+    shown.forEach(function(id){
+      var g = S.members[id].siteName || "소속 미입력";
+      if(!q && g !== lastGroup){ html += '<div class="roster-group">'+esc(g)+'</div>'; lastGroup = g; }
+      html += rosterRowHtml(id, !q && !!S.members[id].siteName);
+    });
+    if(ids.length > shown.length){
+      html += '<button class="btn ghost roster-more" type="button" data-viewer-more="1">더 보기 ('+(ids.length - shown.length)+'명 남음)</button>';
+    }
+    return html;
+  }
+  function viewerPendingCount(){
+    return Object.keys(S.members || {}).filter(function(id){
+      var m = S.members[id];
+      return id !== S.viewerId && !memberIsTeam(m) && !m.viewApproved;
+    }).length;
+  }
+
+  function rosterRowHtml(id, hideSite){
     var m = S.members[id];
     var isMe = id === S.viewerId;
     var isViewer = !memberIsTeam(m);
@@ -2522,12 +2606,12 @@
       if(canWrite() && !isMe){
         mid = '<label class="tg view" title="켜면 이 사람이 변경 이력을 볼 수 있어요."><input type="checkbox" data-view-toggle="'+esc(id)+'"'+(m.viewApproved?' checked':'')+'><span class="sw" aria-hidden="true"></span><span class="lbl">열람 허용</span></label>';
       } else {
-        mid = '<span class="tg-txt'+(m.viewApproved?' on':'')+'">'+(m.viewApproved?'열람 허용':'승인 대기')+'</span>';
+        mid = m.viewApproved ? '<span class="tg-txt view on">열람 허용</span>' : '<span class="tg-txt wait">승인 대기</span>';
       }
     } else if(S.canManageRoster){
       mid = '<label class="tg" title="켜면 현장현황의 담당자 목록에 이 사람이 나와요."><input type="checkbox" data-exec-toggle="'+esc(id)+'"'+(m.isExecutor?' checked':'')+'><span class="sw" aria-hidden="true"></span><span class="lbl">실행담당</span></label>';
     } else {
-      mid = '<span class="tg-txt'+(m.isExecutor?' on':'')+'">'+(m.isExecutor?'실행담당':'')+'</span>';
+      mid = m.isExecutor ? '<span class="tg-txt exec on">실행담당</span>' : '<span class="tg-txt"></span>';
     }
 
     // 오른쪽 칸: 역할. 바꿀 수 있으면 드롭다운 하나, 아니면 글자만.
@@ -2542,6 +2626,12 @@
 
     return '<div class="roster-row">'
       +'<div class="rwho"><span class="rname">'+(isMe?'<span style="color:var(--accent);">(나) </span>':'')+'<span class="uname" data-uid="'+esc(id)+'">…</span></span>'
+      +(isViewer ? (function(){
+          // 소속 그룹 제목 아래에 있을 때는 소속을 다시 적지 않고 직책만 보여준다.
+          var info = (hideSite ? [m.jobTitle] : [m.siteName, m.jobTitle]).filter(Boolean).join(" · ");
+          if(!info && hideSite) return "";
+          return '<span class="rinfo'+(info?'':' none')+'">'+(info ? esc(info) : '소속 미입력')+'</span>';
+        })() : '')
       +'<span class="rmeta">'+seenLabel+'</span></div>'
       + mid + role
       +'</div>';
@@ -2570,10 +2660,15 @@
   /* ---- 내 계정: 비밀번호 변경 ---- */
   function accountSettingsHtml(){
     var f = S.pwForm || {};
+    var me = (S.members && S.members[S.viewerId]) || {};
     var email = (S.session && S.session.user && S.session.user.email) || "";
     return '<div class="detail-card">'
       +'<h3 style="font-family:var(--font-d);font-size:14px;margin:0 0 4px;">내 계정</h3>'
       +'<div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:12px;">'+esc(email)+'</div>'
+      +'<details id="profDetails"'+((!me.siteName || S.profOpen)?' open':'')+' style="margin-bottom:10px;">'
+        +'<summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:var(--ink-soft);">소속·직책'+(me.siteName?' <span style="font-weight:400;color:var(--ink-faint);">· '+esc(me.siteName)+(me.jobTitle?' · '+esc(me.jobTitle):'')+'</span>':' <span style="font-weight:400;color:var(--ink-faint);">· 입력해주세요</span>')+'</summary>'
+        +'<div style="max-width:340px;margin-top:12px;">'+profileFormHtml(me)+'</div>'
+      +'</details>'
       +'<details id="pwDetails"'+(S.pwOpen?' open':'')+'>'
         +'<summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:var(--ink-soft);">비밀번호 변경</summary>'
         +'<div style="max-width:340px;margin-top:12px;">'
@@ -2590,6 +2685,9 @@
   function wireAccountSettings(){
     var det = document.getElementById("pwDetails");
     if(det) det.addEventListener("toggle", function(){ S.pwOpen = det.open; });
+    var pdet = document.getElementById("profDetails");
+    if(pdet) pdet.addEventListener("toggle", function(){ S.profOpen = pdet.open; });
+    wireProfileForm();
     S.pwForm = S.pwForm || {};
     document.querySelectorAll("[data-pwfield]").forEach(function(inp){
       inp.addEventListener("input", function(){ S.pwForm[inp.getAttribute("data-pwfield")] = inp.value; });
@@ -2638,14 +2736,25 @@
     var ids = Object.keys(S.members);
     var teamIds = sortRosterIds(ids.filter(function(id){ return memberIsTeam(S.members[id]); }));
     var viewerIds = ids.filter(function(id){ return !memberIsTeam(S.members[id]); });
-    var teamRows = teamIds.map(rosterRowHtml).join("");
-    var viewerRows = viewerIds.map(rosterRowHtml).join("");
+    var teamRows = teamIds.map(function(id){ return rosterRowHtml(id); }).join("");
+    var pendIds = viewerIds.filter(function(id){ return !S.members[id].viewApproved; })
+      .sort(function(a,b){ return (S.members[b].firstSeenAt||"").localeCompare(S.members[a].firstSeenAt||""); });
+    var apprCount = viewerIds.length - pendIds.length;
 
-    var viewerSection = '<div class="detail-card" style="margin-top:14px;">'
-      +'<h3 style="font-family:var(--font-d);font-size:14px;margin:0 0 4px;">조회자 ('+viewerIds.length+'명)</h3>'
-      +'<div style="font-size:11.5px;color:var(--ink-faint);margin:0 0 6px;">‘열람 허용’을 켜면 변경 이력을 볼 수 있어요. 역할을 팀원·파트장으로 바꾸면 팀 구성으로 올라가요.</div>'
-      +(viewerRows || '<div class="empty">새로 가입했거나 아직 팀원·파트장으로 지정되지 않은 사람이 없습니다.</div>')
+    // 승인이 필요한 사람은 맨 위에 따로 모아 한눈에 보이게, 이미 허용된 사람은 접어두고 검색으로 찾게 한다.
+    var pendingSection = '<div class="detail-card" style="margin-top:14px;">'
+      +'<h3 style="font-family:var(--font-d);font-size:14px;margin:0 0 4px;">승인 대기'+(pendIds.length?' <span class="cnt-pill">'+pendIds.length+'</span>':' (0명)')+'</h3>'
+      +'<div class="roster-hint">‘열람 허용’을 켜면 변경 이력을 볼 수 있어요. 역할을 팀원·파트장으로 바꾸면 팀 구성으로 올라가요.</div>'
+      +(pendIds.length ? pendIds.map(function(id){ return rosterRowHtml(id); }).join("") : '<div class="roster-empty">승인을 기다리는 사람이 없어요.</div>')
     +'</div>';
+    var viewerSection = pendingSection
+      +'<div class="detail-card" style="margin-top:14px;">'
+        +'<details id="viewerDetails"'+((S.viewerOpen || S.viewerQ)?' open':'')+'>'
+          +'<summary class="roster-sum">조회자 ('+apprCount+'명) <span>열람 허용 중</span></summary>'
+          +'<div class="viewer-search"><input id="viewerSearch" type="search" autocomplete="off" placeholder="이름·소속·직책 검색" value="'+esc(S.viewerQ)+'"></div>'
+          +'<div id="viewerListBody">'+approvedViewerListHtml()+'</div>'
+        +'</details>'
+      +'</div>';
 
     return '<div class="detail">'
       +'<div class="content-head"><div><h1>설정</h1></div></div>'
@@ -2753,10 +2862,9 @@
       .catch(function(err){ console.warn(err); toast("삭제 중 오류가 발생했습니다."); });
   }
 
-  function wireSettings(){
-    resolveNames();
-    wireAccountSettings();
-    document.querySelectorAll("[data-view-toggle]").forEach(function(box){
+  // 목록 줄(스위치·역할 드롭다운) 이벤트 연결. 검색/더 보기로 목록 일부만 다시 그릴 때도 재사용한다.
+  function wireRosterRows(root){
+    root.querySelectorAll("[data-view-toggle]").forEach(function(box){
       box.addEventListener("change", function(){
         var id = box.getAttribute("data-view-toggle");
         var next = box.checked;
@@ -2764,8 +2872,7 @@
         if(next) approveViewer(id, undo); else revokeViewer(id, undo);
       });
     });
-    if(!S.canManageRoster) return;
-    document.querySelectorAll("[data-exec-toggle]").forEach(function(box){
+    root.querySelectorAll("[data-exec-toggle]").forEach(function(box){
       box.addEventListener("change", function(){
         var id = box.getAttribute("data-exec-toggle");
         var next = box.checked;
@@ -2774,7 +2881,7 @@
           .catch(function(){ box.checked = !next; toast("변경 중 오류가 발생했습니다. (is_executor 컬럼 추가 SQL을 실행했는지 확인해주세요)"); });
       });
     });
-    document.querySelectorAll("[data-role-sel]").forEach(function(sel){
+    root.querySelectorAll("[data-role-sel]").forEach(function(sel){
       var id = sel.getAttribute("data-role-sel");
       var prev = sel.value;
       sel.addEventListener("change", function(){
@@ -2784,6 +2891,24 @@
           .catch(function(){ sel.value = prev; toast("변경 중 오류가 발생했습니다."); });
       });
     });
+  }
+
+  function wireSettings(){
+    resolveNames();
+    wireAccountSettings();
+    wireRosterRows(document);
+    var vdet = document.getElementById("viewerDetails");
+    if(vdet) vdet.addEventListener("toggle", function(){ S.viewerOpen = vdet.open; });
+    var vbody = document.getElementById("viewerListBody");
+    if(vbody){
+      var refreshViewers = function(){ vbody.innerHTML = approvedViewerListHtml(); wireRosterRows(vbody); resolveNames(); };
+      var vsearch = document.getElementById("viewerSearch");
+      if(vsearch) vsearch.addEventListener("input", function(){ S.viewerQ = vsearch.value; S.viewerLimit = 20; refreshViewers(); });
+      vbody.addEventListener("click", function(e){
+        if(e.target.closest && e.target.closest("[data-viewer-more]")){ S.viewerLimit += 20; refreshViewers(); }
+      });
+    }
+    if(!S.canManageRoster) return;
     document.querySelectorAll("[data-gdoc-upload]").forEach(function(input){
       input.addEventListener("change", function(){
         var major = input.getAttribute("data-gdoc-upload");
