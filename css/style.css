@@ -780,3 +780,7 @@ img{ max-width:100%; }
 .auth-error.show{ display:block; }
 .auth-note{ font-size:11px; color:var(--ink-faint); margin-top:12px; line-height:1.55; }
 .auth-gate-card .f-field{ margin-bottom:12px; }
+
+/* 팀 구성: 실행담당자 지정 토글 */
+.exec-toggle{ padding:4px 10px; font-size:11px; white-space:nowrap; }
+.exec-toggle.on{ background:var(--surface-2); border-color:var(--accent); color:var(--accent); font-weight:700; }
