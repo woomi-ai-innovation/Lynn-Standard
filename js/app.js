@@ -764,7 +764,7 @@
       createdAt:"created_at"
     },
     members: {
-      name:"name", displayName:"display_name", role:"role", isAdmin:"is_admin", viewApproved:"view_approved",
+      name:"name", displayName:"display_name", role:"role", isAdmin:"is_admin", viewApproved:"view_approved", isExecutor:"is_executor",
       firstSeenAt:"first_seen_at", lastSeenAt:"last_seen_at",
       addedBy:"added_by", addedAt:"added_at", createdAt:"created_at"
     },
@@ -2524,9 +2524,20 @@
         viewChip = '<span class="chip pending" title="아직 팀원/파트장의 조회 승인을 받지 못했어요.">승인 대기</span>';
       }
     }
+    // 실행담당자 표시(권한 역할과 별개): 현장현황의 담당자 목록에는 이 표시가 켜진 팀원·파트장만 나온다.
+    // 파트장(팀 구성 관리 권한)만 켜고 끌 수 있고, 그 외에는 켜져 있을 때만 읽기용 칩으로 보여준다.
+    var execChip = "";
+    if(memberIsTeam(m)){
+      if(S.canManageRoster){
+        execChip = '<button class="btn ghost exec-toggle'+(m.isExecutor?' on':'')+'" type="button" data-exec-toggle="'+esc(id)+'" aria-pressed="'+(m.isExecutor?'true':'false')+'" title="켜면 현장현황의 담당자 목록에 이 사람이 나와요.">'+(m.isExecutor?'실행담당자 ✓':'실행담당자 지정')+'</button>';
+      } else if(m.isExecutor){
+        execChip = '<span class="chip approved" title="현장현황의 담당자로 지정할 수 있어요.">실행담당자</span>';
+      }
+    }
     return '<div class="roster-row"><span class="rname">'+(isMe?'<span style="color:var(--accent);">(나) </span>':'')+'<span class="uname" data-uid="'+esc(id)+'">…</span></span>'
       +'<span class="rmeta mono">'+seenLabel+'</span>'
       +viewChip
+      +execChip
       +(S.canManageRoster && !isMe ?
         '<div class="seg" data-role-seg="'+esc(id)+'">'
           +'<button data-role="조회자" class="'+(m.role!=="팀원"&&m.role!=="파트장"?"on":"")+'">조회자</button>'
@@ -2712,6 +2723,11 @@
     return S.db.doc("members/"+id).update({ role: role });
   }
 
+  function setMemberExecutor(id, on){
+    if(!S.db) return Promise.reject();
+    return S.db.doc("members/"+id).update({ isExecutor: !!on });
+  }
+
   function approveViewer(id){
     if(!S.db) return;
     S.db.doc("members/"+id).update({ viewApproved: true })
@@ -2745,6 +2761,15 @@
       btn.addEventListener("click", function(){ revokeViewer(btn.getAttribute("data-revoke-view")); });
     });
     if(!S.canManageRoster) return;
+    document.querySelectorAll("[data-exec-toggle]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-exec-toggle");
+        var next = !(S.members[id] && S.members[id].isExecutor);
+        setMemberExecutor(id, next)
+          .then(function(){ toast(next ? "실행담당자로 지정했습니다." : "실행담당자 지정을 해제했습니다."); })
+          .catch(function(){ toast("변경 중 오류가 발생했습니다. (is_executor 컬럼 추가 SQL을 실행했는지 확인해주세요)"); });
+      });
+    });
     document.querySelectorAll("[data-role-seg]").forEach(function(seg){
       var id = seg.getAttribute("data-role-seg");
       seg.querySelectorAll("[data-role]").forEach(function(btn){
@@ -3536,11 +3561,18 @@
       }
     }
 
-    var managerOptions = '<option value="">미지정</option>' + Object.keys(S.members).map(function(mid){
-      return { id: mid, name: (S.members[mid].name || "이름 비공개") };
+    // 담당자 목록: 실행담당자로 지정된 사람만. 이미 이 현장의 담당자로 저장된 사람은 지정이 해제됐어도
+    // 선택값이 "미지정"으로 바뀌지 않도록 목록에 남겨둔다.
+    var execIds = Object.keys(S.members).filter(function(mid){
+      return (S.members[mid].isExecutor && memberIsTeam(S.members[mid])) || mid === draft.managerId;
+    });
+    var managerOptions = '<option value="">미지정</option>' + (execIds.length ? execIds.map(function(mid){
+      var x = S.members[mid];
+      var notExec = !(x.isExecutor && memberIsTeam(x));
+      return { id: mid, name: (x.name || "이름 비공개"), notExec: notExec };
     }).sort(function(a,b){ return a.name.localeCompare(b.name,"ko"); }).map(function(x){
-      return '<option value="'+esc(x.id)+'"'+(draft.managerId===x.id?' selected':'')+'>'+esc(x.name)+'</option>';
-    }).join("");
+      return '<option value="'+esc(x.id)+'"'+(draft.managerId===x.id?' selected':'')+'>'+esc(x.name)+(x.notExec?' (실행담당 아님)':'')+'</option>';
+    }).join("") : '<option value="" disabled>실행담당자가 없습니다 (설정 &gt; 팀 구성에서 지정)</option>');
 
     var controlCard = (statusRowHtml ? '<div class="site-status-row">'+statusRowHtml+'</div>' : '')
       + '<div class="detail-card site-control-row">'
