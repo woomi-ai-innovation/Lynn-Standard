@@ -530,11 +530,11 @@ img{ max-width:100%; }
   }
 
   /* ---- settings ---- */
-  .roster-row{ display:grid; grid-template-columns:minmax(0,1fr) 96px 98px; align-items:center; column-gap:14px; padding:12px 4px; border-bottom:1px solid var(--line-soft); }
+  .roster-row{ display:grid; grid-template-columns:minmax(0,1fr) 96px 80px; align-items:center; column-gap:14px; padding:8px 4px; border-bottom:1px solid var(--line-soft); }
   .roster-row:last-child{ border-bottom:none; }
-  .roster-row .rwho{ min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .roster-row .rwho{ min-width:0; display:flex; align-items:baseline; gap:8px; }
   .roster-row .rname{ font-weight:600; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .roster-row .rmeta{ font-size:11px; color:var(--ink-faint); }
+  .roster-row .rmeta{ font-size:11px; color:var(--ink-faint); flex:none; white-space:nowrap; }
 
   .toast{
     position:fixed; left:50%; bottom:24px; transform:translate(-50%,0); background:var(--ink); color:var(--bg);
@@ -793,13 +793,13 @@ img{ max-width:100%; }
   --r-team-bg:#403d36; --r-team-ink:#cdc8bb; --r-team-dot:#8d8777;
   --r-view-bg:transparent; --r-view-ink:#8d9199; --r-view-dot:#5b5f68; }
 
-.tg{ position:relative; display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:12px; color:var(--ink-faint); user-select:none; white-space:nowrap; }
+.tg{ position:relative; display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:12px; font-weight:400; color:var(--ink-faint); user-select:none; white-space:nowrap; }
 .tg input{ position:absolute; opacity:0; width:0; height:0; }
 .tg .sw{ position:relative; flex:none; width:28px; height:16px; border-radius:999px; background:var(--line); transition:background .15s; }
 .tg .sw::after{ content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:var(--surface); transition:transform .15s; }
 .tg input:checked + .sw{ background:var(--tg-exec); }
 .tg input:checked + .sw::after{ transform:translateX(12px); }
-.tg input:checked ~ .lbl{ color:var(--ink); font-weight:600; }
+.tg input:checked ~ .lbl{ color:var(--ink); }
 .tg input:focus-visible + .sw{ outline:2px solid var(--tg-exec); outline-offset:2px; }
 .tg.view input:checked + .sw{ background:var(--tg-view); }
 .tg.view input:checked ~ .lbl{ color:var(--tg-view-ink); }
@@ -812,12 +812,12 @@ img{ max-width:100%; }
 .role-sel[data-r="파트장"], .role-txt[data-r="파트장"]{ --rb:var(--r-lead-bg); --rk:var(--r-lead-ink); --rd:var(--r-lead-dot); }
 .role-sel[data-r="팀원"], .role-txt[data-r="팀원"]{ --rb:var(--r-team-bg); --rk:var(--r-team-ink); --rd:var(--r-team-dot); }
 .role-sel{ position:relative; display:block; }
-.role-sel::before, .role-txt::before{ content:""; position:absolute; left:12px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--rd); pointer-events:none; }
-.role-sel select{ appearance:none; -webkit-appearance:none; width:100%; font:inherit; font-size:12.5px; font-weight:600; color:var(--rk); background:var(--rb); border:1px solid transparent; border-radius:999px; padding:7px 28px 7px 26px; cursor:pointer; transition:filter .15s, border-color .15s; }
+.role-sel::before, .role-txt::before{ content:""; position:absolute; left:10px; top:50%; width:5px; height:5px; margin-top:-2.5px; border-radius:50%; background:var(--rd); pointer-events:none; }
+.role-sel select{ appearance:none; -webkit-appearance:none; width:100%; font:inherit; font-size:12px; font-weight:600; color:var(--rk); background:var(--rb); border:1px solid transparent; border-radius:999px; padding:3.5px 22px 3.5px 22px; cursor:pointer; transition:filter .15s, border-color .15s; }
 .role-sel[data-r="조회자"] select{ border-color:var(--line); }
 .role-sel select:hover{ filter:brightness(.97); }
 .role-sel select:focus-visible{ outline:2px solid var(--rd); outline-offset:2px; }
-.role-sel::after{ content:""; position:absolute; right:12px; top:50%; width:5px; height:5px; border-right:1.5px solid var(--rk); border-bottom:1.5px solid var(--rk); opacity:.55; transform:translateY(-70%) rotate(45deg); pointer-events:none; }
-.role-txt{ position:relative; display:block; font-size:12.5px; font-weight:600; color:var(--rk); background:var(--rb); border-radius:999px; padding:6.75px 14px 6.75px 26px; line-height:1.4; }
-.role-txt[data-r="조회자"]{ border:1px solid var(--line); padding:6px 13px 6px 25px; }
-@media (max-width:520px){ .roster-row{ grid-template-columns:minmax(0,1fr) 88px 90px; column-gap:10px; } }
+.role-sel::after{ content:""; position:absolute; right:10px; top:50%; width:4px; height:4px; border-right:1.5px solid var(--rk); border-bottom:1.5px solid var(--rk); opacity:.55; transform:translateY(-70%) rotate(45deg); pointer-events:none; }
+.role-txt{ position:relative; display:block; font-size:12px; font-weight:600; color:var(--rk); background:var(--rb); border-radius:999px; padding:3.5px 10px 3.5px 22px; line-height:1.4; }
+.role-txt[data-r="조회자"]{ border:1px solid var(--line); padding:2.5px 9px 2.5px 21px; }
+@media (max-width:520px){ .roster-row{ grid-template-columns:minmax(0,1fr) 88px 76px; column-gap:10px; } .roster-row .rwho{ flex-direction:column; align-items:flex-start; gap:1px; } }
