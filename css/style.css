@@ -858,3 +858,6 @@ img{ max-width:100%; }
 .pending-info{ margin-top:14px; padding:9px 12px; border-radius:10px; background:var(--surface-2); color:var(--ink-soft); font-size:12.5px; }
 .auth-gate-card .prof-form{ margin-top:12px; text-align:left; }
 .auth-gate-card .prof-form .btn{ width:100%; margin-top:4px; }
+.prof-actions{ display:flex; gap:8px; }
+.prof-form.locked input, .prof-form.locked select{ background:var(--surface-2); color:var(--ink); -webkit-text-fill-color:var(--ink); opacity:1; cursor:default; }
+.prof-form.locked select{ appearance:none; -webkit-appearance:none; background-image:none; }
