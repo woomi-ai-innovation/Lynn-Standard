@@ -1430,16 +1430,32 @@
       return '<option value="'+j+'"'+(j===sel?' selected':'')+'>'+j+'</option>';
     }).join("");
   }
+  // 저장된 소속·직책은 잠가두고(읽기 전용), "수정"을 눌러야 바꿀 수 있다. 아직 저장한 적 없으면 바로 입력 상태.
   function profileFormHtml(m){
     m = m || {};
-    return '<div class="prof-form">'
-      +'<div class="f-field"><label for="profSite">소속</label><input id="profSite" data-profield="site" type="text" maxlength="40" placeholder="예: 화성남양2차 임대 / 건축예산팀" value="'+esc(m.siteName||"")+'"></div>'
-      +'<div class="f-field"><label for="profJob">직책 (선택)</label><select id="profJob" data-profield="job">'+jobOptionsHtml(m.jobTitle||"")+'</select></div>'
+    var locked = !!m.siteName && !S.profEdit;
+    var dis = locked ? ' disabled' : '';
+    return '<div class="prof-form'+(locked?' locked':'')+'">'
+      +'<div class="f-field"><label for="profSite">소속</label><input id="profSite" data-profield="site" type="text" maxlength="40" placeholder="예: 화성남양2차 임대 / 건축예산팀" value="'+esc(m.siteName||"")+'"'+dis+'></div>'
+      +'<div class="f-field"><label for="profJob">직책 (선택)</label><select id="profJob" data-profield="job"'+dis+'>'+jobOptionsHtml(m.jobTitle||"")+'</select></div>'
       +'<div class="auth-error" id="profError"></div>'
-      +'<button class="btn accent" id="btnProfSave" type="button">저장</button>'
+      +(locked
+        ? '<button class="btn ghost" id="btnProfEdit" type="button">수정</button>'
+        : '<div class="prof-actions"><button class="btn accent" id="btnProfSave" type="button">저장</button>'
+            +(m.siteName ? '<button class="btn ghost" id="btnProfCancel" type="button">취소</button>' : '')+'</div>')
     +'</div>';
   }
   function wireProfileForm(){
+    var editBtn = document.getElementById("btnProfEdit");
+    if(editBtn){
+      editBtn.addEventListener("click", function(){
+        S.profEdit = true; render();
+        var el = document.getElementById("profSite"); if(el) el.focus();
+      });
+      return;
+    }
+    var cancel = document.getElementById("btnProfCancel");
+    if(cancel) cancel.addEventListener("click", function(){ S.profEdit = false; render(); });
     var btn = document.getElementById("btnProfSave");
     if(!btn) return;
     var errBox = document.getElementById("profError");
@@ -1452,7 +1468,7 @@
       if(!S.db || !S.viewerId){ showErr("저장 기능을 사용할 수 없습니다."); return; }
       btn.disabled = true;
       S.db.doc("members/"+S.viewerId).update({ siteName: site, jobTitle: job })
-        .then(function(){ btn.disabled = false; toast("저장했습니다."); })
+        .then(function(){ btn.disabled = false; S.profEdit = false; toast("저장했습니다."); render(); })
         .catch(function(err){ console.warn(err); btn.disabled = false; showErr("저장 중 오류가 발생했습니다. (site_name / job_title 컬럼 추가 SQL을 실행했는지 확인해주세요)"); });
     });
   }
@@ -1466,9 +1482,8 @@
         +'<h1>'+esc(name)+'님, 승인 대기 중이에요</h1>'
         +'<p>실행 편성 기준 변경 이력은 대외비라, 팀원 또는 파트장의 승인을 받은 뒤에 조회할 수 있어요. 팀원 또는 파트장에게 승인을 요청해주세요.</p>'
         +'<div class="welcome-role-note">설정 페이지 &gt; 조회자 목록에서 팀원 또는 파트장이 "열람 허용"을 켜주면 바로 내용을 볼 수 있어요.</div>'
-        +(me.siteName
-          ? '<div class="pending-info">제출한 정보 · '+esc(me.siteName)+(me.jobTitle?' · '+esc(me.jobTitle):'')+'</div>'
-          : '<p style="margin-top:16px;">승인하는 분이 알아볼 수 있게 소속과 직책을 알려주세요.</p>'+profileFormHtml(me))
+        +(me.siteName ? '' : '<p style="margin-top:16px;">승인하는 분이 알아볼 수 있게 소속과 직책을 알려주세요.</p>')
+        +profileFormHtml(me)
         +'<button class="btn ghost" id="btnPendingLogout" type="button" style="width:100%;margin-top:16px;">로그아웃</button>'
       +'</div>'
     +'</div>';
