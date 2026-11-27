@@ -2639,7 +2639,8 @@
       role = '<span class="role-txt" data-r="'+curRole+'"'+(isMe?' title="본인 역할은 여기서 바꿀 수 없어요. 다른 파트장에게 요청해주세요."':'')+'>'+esc(curRole)+'</span>';
     }
 
-    return '<div class="roster-row">'
+    // 역할을 바꿀 수 없는 화면(팀원 등)에서는 드롭다운 자리를 비워두지 않고 알약 크기에 딱 맞춘다.
+    return '<div class="roster-row'+(S.canManageRoster?'':' ro')+'">'
       +'<div class="rwho"><span class="rname">'+(isMe?'<span style="color:var(--accent);">(나) </span>':'')+'<span class="uname" data-uid="'+esc(id)+'">…</span></span>'
       +(isViewer ? (function(){
           // 소속 그룹 제목 아래에 있을 때는 소속을 다시 적지 않고 직책만 보여준다.
@@ -3649,11 +3650,26 @@
     var html = "";
     MAJORS.forEach(function(maj){
       var arr = byMajor[maj]; if(!arr || !arr.length) return;
-      html += '<div class="section-title" style="--dot:'+MAJOR_COLOR[maj]+';"><span class="dot"></span>'+esc(maj)+'</div><div class="change-list">'
+      html += '<div class="section-title" id="siteSec-'+MAJORS.indexOf(maj)+'" style="--dot:'+MAJOR_COLOR[maj]+';"><span class="dot"></span>'+esc(maj)+'</div><div class="change-list">'
         +arr.slice().sort(byDateDesc).map(function(c){ return siteCheckRowHtml(c, !!appliedMap[c.id], locked, showCheckbox); }).join("")
       +'</div>';
     });
     return html;
+  }
+
+  // 현장 상세 상단 고정 바의 공종 바로가기 칩. 체크리스트 탭에서는 아직 반영 안 한 건수(다 했으면 ✓), 마감 이후 탭에서는 전체 건수.
+  function siteSectionChipsHtml(list, appliedMap, showCheckbox){
+    var by = {};
+    list.forEach(function(c){ (by[c.major] = by[c.major] || []).push(c); });
+    var html = "";
+    MAJORS.forEach(function(maj, i){
+      var arr = by[maj]; if(!arr || !arr.length) return;
+      var left = showCheckbox ? arr.filter(function(c){ return !appliedMap[c.id]; }).length : arr.length;
+      var done = showCheckbox && !left;
+      html += '<button type="button" class="jump-chip" data-jump="siteSec-'+i+'" style="--dot:'+MAJOR_COLOR[maj]+';"><span class="dot"></span>'+esc(maj)
+        +'<span class="n'+(done?' done':'')+'">'+(done?'✓':left)+'</span></button>';
+    });
+    return html ? '<div class="jump-chips">'+html+'</div>' : '';
   }
 
   function statsForList(list, appliedMap){
@@ -3741,7 +3757,7 @@
     var afterCount = rel.after.length;
     var tabsHtml = "";
     if(draft.deadline){
-      tabsHtml = '<div class="seg" style="margin-bottom:14px;">'
+      tabsHtml = '<div class="seg">'
         +'<button data-site-mode="checklist" class="'+(S.siteViewMode!=="after"?"on":"")+'" type="button">체크리스트 ('+rel.before.length+')</button>'
         +'<button data-site-mode="after" class="'+(S.siteViewMode==="after"?"on":"")+'" type="button">마감 이후 변경'+(afterCount?' ('+afterCount+')':'')+'</button>'
       +'</div>';
@@ -3768,6 +3784,11 @@
       +'</div>';
     }
 
+    // 탭 + 진행률 + 공종 바로가기를 한 덩어리로 묶어 스크롤해도 화면 위에 붙어 있게 한다.
+    var chipsHtml = siteSectionChipsHtml(activeList, appliedMap, showCheckbox);
+    var stickyHtml = (tabsHtml || progress || chipsHtml)
+      ? '<div class="site-sticky" id="siteSticky">'+((tabsHtml || progress) ? '<div class="site-sticky-row">'+tabsHtml+progress+'</div>' : '')+chipsHtml+'</div>'
+      : '';
     var activeListHtml = groupedChecklistHtml(activeList, appliedMap, activeLocked, showCheckbox);
     if(!activeListHtml){
       activeListHtml = mode === "after"
@@ -3780,9 +3801,8 @@
       +'<div class="content-head"><div><h1>'+esc(s.name)+'</h1><div class="meta">실행편성 때 반영한 기준을 체크하고, 저장 버튼을 눌러 반영하세요.</div></div></div>'
       +controlCard
       +guidelineCard
-      +tabsHtml
+      +stickyHtml
       +afterNote
-      +progress
       +activeListHtml
     +'</div>';
   }
@@ -3908,6 +3928,44 @@
         render();
       });
     });
+    wireSiteSticky();
+  }
+
+  // 상단 고정 바: 위쪽 헤더 높이만큼 내려 붙이고, 공종 칩을 누르면 그 공종으로 이동, 스크롤하면 지금 보는 공종 칩을 강조한다.
+  function wireSiteSticky(){
+    if(S._siteStickyCleanup){ S._siteStickyCleanup(); S._siteStickyCleanup = null; }
+    var bar = document.getElementById("siteSticky");
+    if(!bar) return;
+    var topbar = document.querySelector(".topbar");
+    var chips = Array.prototype.slice.call(bar.querySelectorAll("[data-jump]"));
+    function offsets(){
+      var tb = (topbar && getComputedStyle(bar).position === "sticky") ? topbar.offsetHeight : 0;
+      bar.style.top = tb + "px";
+      document.documentElement.style.setProperty("--site-sticky-offset", (tb + bar.offsetHeight + 8) + "px");
+      return tb + bar.offsetHeight + 8;
+    }
+    offsets();
+    chips.forEach(function(chip){
+      chip.addEventListener("click", function(){
+        var el = document.getElementById(chip.getAttribute("data-jump"));
+        if(el) el.scrollIntoView({ behavior:"smooth", block:"start" });
+      });
+    });
+    var ticking = false;
+    function spy(){
+      ticking = false;
+      var off = offsets() + 2, current = null;
+      chips.forEach(function(chip){
+        var el = document.getElementById(chip.getAttribute("data-jump"));
+        if(el && el.getBoundingClientRect().top <= off) current = chip;
+      });
+      chips.forEach(function(chip){ chip.classList.toggle("on", chip === current); });
+    }
+    function onScroll(){ if(!ticking){ ticking = true; requestAnimationFrame(spy); } }
+    window.addEventListener("scroll", onScroll, { passive:true });
+    window.addEventListener("resize", onScroll);
+    S._siteStickyCleanup = function(){ window.removeEventListener("scroll", onScroll); window.removeEventListener("resize", onScroll); };
+    spy();
   }
 
   /* ============ view wiring dispatcher ============ */
