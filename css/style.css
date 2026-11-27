@@ -533,7 +533,7 @@ img{ max-width:100%; }
   .roster-row{ display:grid; grid-template-columns:minmax(0,1fr) 80px 64px; align-items:center; column-gap:8px; padding:4px 4px; border-bottom:1px solid var(--line-soft); }
   .roster-row:last-child{ border-bottom:none; }
   .roster-row .rwho{ min-width:0; display:flex; align-items:baseline; gap:8px; }
-  .roster-row .rname{ font-weight:600; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .roster-row .rname, .roster-row .rname .uname{ font-weight:400; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   /* 현장 상세의 탭(체크리스트 / 마감 이후 변경)도 쓰는 공용 분할 버튼 */
   .seg{ display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
   .seg button{ border:none; background:var(--surface); padding:5px 12px; font-size:11.5px; font-weight:600; color:var(--ink-soft); }
@@ -860,7 +860,7 @@ img{ max-width:100%; }
 .auth-gate-card .prof-form .btn{ width:100%; margin-top:4px; }
 .prof-actions{ display:flex; gap:8px; }
 .prof-form.locked input, .prof-form.locked select{ background:var(--surface-2); color:var(--ink); -webkit-text-fill-color:var(--ink); opacity:1; cursor:default; }
-.prof-form.locked select{ appearance:none; -webkit-appearance:none; background-image:none; }
+.prof-form.locked select{ appearance:none; -webkit-appearance:none; background-image:none !important; }
 
 /* 읽기 전용(역할 변경 권한 없음): 가운데·오른쪽 칸을 내용 크기에 맞춰 불필요한 여백을 없앤다 */
 .roster-row.ro{ grid-template-columns:minmax(0,1fr) auto 56px; column-gap:10px; }
@@ -885,3 +885,14 @@ img{ max-width:100%; }
 .jump-chip.on .n{ color:var(--bg); opacity:.75; }
 .section-title[id^="siteSec-"]{ scroll-margin-top:var(--site-sticky-offset,150px); }
 @media (max-width:760px){ .site-sticky{ position:static; } }
+
+/* 설정 > 내 계정: 소속·직책·버튼을 한 줄로 (로그인/가입 화면의 세로 폼은 그대로) */
+#profDetails .prof-form{ display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) auto; column-gap:8px; row-gap:6px; align-items:end; margin-top:8px; }
+#profDetails .prof-form .f-field{ margin-bottom:0; gap:3px; }
+#profDetails .prof-form .f-field label{ font-size:11px; font-weight:500; }
+#profDetails .prof-form .f-field input, #profDetails .prof-form .f-field select{ height:30px; box-sizing:border-box; padding:0 9px; font-size:12px; }
+#profDetails .prof-form .f-field select{ appearance:none; -webkit-appearance:none; padding-right:24px; background-image:linear-gradient(45deg,transparent 50%,var(--ink-faint) 50%),linear-gradient(135deg,var(--ink-faint) 50%,transparent 50%); background-position:calc(100% - 13px) 13px,calc(100% - 9px) 13px; background-size:4px 4px; background-repeat:no-repeat; }
+#profDetails .prof-form .btn, #profDetails .prof-form .prof-actions .btn{ margin-top:0; height:30px; box-sizing:border-box; padding:0 14px; font-size:11.5px; font-weight:500; white-space:nowrap; }
+#profDetails .prof-form .prof-actions{ gap:6px; }
+#profDetails .prof-form .auth-error{ grid-column:1/-1; order:5; margin-bottom:0; }
+@media (max-width:520px){ #profDetails .prof-form{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); } #profDetails .prof-form .btn, #profDetails .prof-form .prof-actions{ grid-column:1/-1; justify-self:start; } }
