@@ -2686,7 +2686,7 @@
       +'<div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:12px;">'+esc(email)+'</div>'
       +'<details id="profDetails"'+((!me.siteName || S.profOpen)?' open':'')+' style="margin-bottom:10px;">'
         +'<summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:var(--ink-soft);">소속·직책'+(me.siteName?' <span style="font-weight:400;color:var(--ink-faint);">· '+esc(me.siteName)+(me.jobTitle?' · '+esc(me.jobTitle):'')+'</span>':' <span style="font-weight:400;color:var(--ink-faint);">· 입력해주세요</span>')+'</summary>'
-        +'<div style="max-width:340px;margin-top:12px;">'+profileFormHtml(me)+'</div>'
+        +'<div style="max-width:520px;margin-top:4px;">'+profileFormHtml(me)+'</div>'
       +'</details>'
       +'<details id="pwDetails"'+(S.pwOpen?' open':'')+'>'
         +'<summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:var(--ink-soft);">비밀번호 변경</summary>'
