@@ -2606,6 +2606,9 @@
     }).length;
   }
 
+  // 화면에 보이는 역할 이름만 "팀 원"으로 띄워 쓴다(저장 값은 그대로 "팀원"). 공백은 전각 한 칸이라 "파트장"과 글자 폭이 같다.
+  function roleLabel(r){ return r === "팀원" ? "팀\u2003원" : r; }
+
   function rosterRowHtml(id, hideSite){
     var m = S.members[id];
     var isMe = id === S.viewerId;
@@ -2633,10 +2636,10 @@
     var role;
     if(S.canManageRoster && !isMe){
       role = '<span class="role-sel" data-r="'+curRole+'"><select data-role-sel="'+esc(id)+'" aria-label="역할">'
-        + ["조회자","팀원","파트장"].map(function(r){ return '<option value="'+r+'"'+(r===curRole?' selected':'')+'>'+r+'</option>'; }).join("")
+        + ["조회자","팀원","파트장"].map(function(r){ return '<option value="'+r+'"'+(r===curRole?' selected':'')+'>'+roleLabel(r)+'</option>'; }).join("")
         + '</select></span>';
     } else {
-      role = '<span class="role-txt" data-r="'+curRole+'"'+(isMe?' title="본인 역할은 여기서 바꿀 수 없어요. 다른 파트장에게 요청해주세요."':'')+'>'+esc(curRole)+'</span>';
+      role = '<span class="role-txt" data-r="'+curRole+'"'+(isMe?' title="본인 역할은 여기서 바꿀 수 없어요. 다른 파트장에게 요청해주세요."':'')+'>'+esc(roleLabel(curRole))+'</span>';
     }
 
     // 역할을 바꿀 수 없는 화면(팀원 등)에서는 드롭다운 자리를 비워두지 않고 알약 크기에 딱 맞춘다.
