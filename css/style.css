@@ -533,7 +533,7 @@ img{ max-width:100%; }
   .roster-row{ display:grid; grid-template-columns:minmax(0,1fr) 80px 64px; align-items:center; column-gap:8px; padding:4px 4px; border-bottom:1px solid var(--line-soft); }
   .roster-row:last-child{ border-bottom:none; }
   .roster-row .rwho{ min-width:0; display:flex; align-items:baseline; gap:8px; }
-  .roster-row .rname, .roster-row .rname .uname{ font-weight:400; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .roster-row .rname, .roster-row .rname .uname{ font-weight:500; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   /* 현장 상세의 탭(체크리스트 / 마감 이후 변경)도 쓰는 공용 분할 버튼 */
   .seg{ display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
   .seg button{ border:none; background:var(--surface); padding:5px 12px; font-size:11.5px; font-weight:600; color:var(--ink-soft); }
